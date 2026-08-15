@@ -1,0 +1,8 @@
+recognizers:
+  - name: InAadhaarRecognizer
+    supported_languages: 
+    - en
+    type: predefined
+    enabled: true
+    country_code: in
+    context: ["aadhaar", "uidai", "aadhar"]
