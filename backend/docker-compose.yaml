@@ -9,4 +9,9 @@ services:
     container_name: presidio-anonymizer
     ports:
       - '5001:3000'
+  redis:
+    image: docker.io/library/redis:alpine
+    container_name: redis
+    ports:
+      - '6379:6379'
 

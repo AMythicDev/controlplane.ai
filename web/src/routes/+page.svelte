@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
   import { 
     mockDashboardStats, 
     mockTimeSeriesPerf,
@@ -20,13 +21,27 @@
 
   // Formatters
   const formatCost = (val: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 3 }).format(val);
-  const formatNum = (val: number) => new Intl.NumberFormat('en-US', { maximumFractionDigits: 1 }).format(val);
+  const formatNum = (val: number) => new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 }).format(val);
 
   // Time format for cards
   const formatTime = (ts: string) => {
     const d = new Date(ts);
     return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
   };
+
+  let liveCost = $state<number | null>(null);
+
+  onMount(async () => {
+    try {
+      const res = await fetch('/v1/cost');
+      if (res.ok) {
+        const data = await res.json();
+        liveCost = data.cost_dollars;
+      }
+    } catch (e) {
+      console.error('Failed to fetch live cost', e);
+    }
+  });
 </script>
 
 <div class="flex flex-col gap-24 relative z-10 w-full min-h-full pb-32">
@@ -55,7 +70,11 @@
       <div class="flex flex-col items-center px-4 md:px-12 relative z-10 group">
         <div class="text-[80px] lg:text-[110px] font-mono font-bold leading-none tracking-tighter text-accent-cost tabular-nums hover:scale-105 transition-transform duration-500 cursor-default drop-shadow-[0_0_25px_rgba(var(--color-accent-cost),0.4)] flex items-start">
           <span class="text-4xl lg:text-6xl mt-4 opacity-50">$</span>
-          <span>{formatNum(mockDashboardStats.totalSpend / 1000)}<span class="text-4xl lg:text-6xl text-accent-cost/50">k</span></span>
+          {#if liveCost !== null}
+            <span>{formatNum(liveCost)}</span>
+          {:else}
+            <span>{formatNum(mockDashboardStats.totalSpend / 1000)}<span class="text-4xl lg:text-6xl text-accent-cost/50">k</span></span>
+          {/if}
         </div>
         <div class="uppercase tracking-[0.2em] text-xs text-secondary mt-4 mb-8 font-medium">Total Spend</div>
         <div class="w-full h-8 opacity-70 group-hover:opacity-100 transition-opacity">
