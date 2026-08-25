@@ -1,44 +1,28 @@
 package main
 
 import (
-	// "bufio"
 	"context"
 	"fmt"
-	"slices"
-	"strings"
-
-	// "fmt"
-	// "github.com/AMythicDev/controlplane/pii-detection"
-	"github.com/gin-gonic/gin"
-	// "os"
 	"log"
 	"net/http"
+
+	"github.com/gin-gonic/gin"
 )
 
-var SUPPORTED_PROVIDERS = [5]string{"anthropic", "google", "openai", "openrouter", "nvidia"}
+type Config struct {
+	Enviroment        string
+	MockServerBaseUrl string
+}
 
-func extractProviderModel(spec string) (string, string, error) {
-	split_spec := strings.SplitN(spec, "/", 2)
-	if len(split_spec) != 2 {
-		return "", "", fmt.Errorf("invalid format spec: '%s'", spec)
-	}
-
-	provider := split_spec[0]
-	model := split_spec[1]
-
-	if !slices.Contains(SUPPORTED_PROVIDERS[:], provider) {
-		return "", "", fmt.Errorf("invalid provider: '%s'", provider)
-	}
-
-	return provider, model, nil
+var LoadedConfig = Config{
+	Enviroment:        "testing",
+	MockServerBaseUrl: "http://localhost:1080/v1",
 }
 
 func setupRouter() *gin.Engine {
 	r := gin.Default()
 
-	// Define a simple GET endpoint
 	r.GET("/healthcheck", func(c *gin.Context) {
-		// Return JSON response
 		c.JSON(http.StatusOK, gin.H{
 			"status": "healthy",
 		})
@@ -117,6 +101,10 @@ func setupRouter() *gin.Engine {
 			return
 		}
 
+		if len(responseContent.Logprobs) > 0 {
+			fmt.Println(confidenceScore(responseContent.Logprobs))
+		}
+
 		// 2. Track Cost: Simulate cost recording for MVP (e.g., $0.01 per request)
 		// In production, this happens AFTER receiving the provider response and token usage
 		simulatedCost := int64(10000 * 100) // 1 cent = 10,000 microcents
@@ -128,22 +116,23 @@ func setupRouter() *gin.Engine {
 			}
 		}()
 
+		// Build the choice map
+		choice := gin.H{
+			"index": 0,
+			"message": gin.H{
+				"role":    "assistant",
+				"content": responseContent.Content,
+			},
+			"finish_reason": "stop",
+		}
+
 		// Return response
 		c.JSON(http.StatusOK, gin.H{
 			"id":      "chatcmpl-" + provider,
 			"object":  "chat.completion",
 			"created": 1700000000,
 			"model":   req.Model,
-			"choices": []gin.H{
-				{
-					"index": 0,
-					"message": gin.H{
-						"role":    "assistant",
-						"content": responseContent,
-					},
-					"finish_reason": "stop",
-				},
-			},
+			"choices": []gin.H{choice},
 		})
 	})
 
@@ -169,13 +158,10 @@ func setupRouter() *gin.Engine {
 }
 
 func main() {
-	// Initialize Redis connection
 	InitRedis()
 
 	r := setupRouter()
 
-	// Start server on port 8080 (default)
-	// Server will listen on 0.0.0.0:8080 (localhost:8080 on Windows)
 	if err := r.Run(); err != nil {
 		log.Fatalf("failed to run server: %v", err)
 	}

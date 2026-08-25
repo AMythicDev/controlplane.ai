@@ -7,10 +7,11 @@ import (
 	"time"
 
 	"github.com/redis/go-redis/v9"
+	"log"
 )
 
 // DailyBudgetMicroCents represents a $5.00 daily limit (5,000,000 microcents)
-const DailyBudgetMicroCents int64 = 5000000
+const DailyBudgetMicroCents int64 = 50_000_000
 
 var rdb *redis.Client
 
@@ -21,6 +22,16 @@ func InitRedis() {
 		Password: "", // no password set
 		DB:       0,  // use default DB
 	})
+
+	ctx := context.Background()
+
+	pingCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+
+	_, err := rdb.Ping(pingCtx).Result()
+	if err != nil {
+		log.Fatalf("Redis is NOT available: %v", err)
+	}
 }
 
 // GetUserDailyKey generates the Redis key for a user's daily spend

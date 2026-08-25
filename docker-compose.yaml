@@ -14,4 +14,9 @@ services:
     container_name: redis
     ports:
       - '6379:6379'
-
+  mockserver:
+    image: docker.io/mockserver/mockserver
+    container_name: mockserver
+    ports:
+      - '1080:1080'
+    profiles: [testing]

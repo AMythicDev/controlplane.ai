@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -14,7 +15,16 @@ func TestChatCompletionsProxy(t *testing.T) {
 	// Initialize the Redis client which will connect to the local valkey instance
 	InitRedis()
 
+	LoadedConfig.Enviroment = "testing"
+
 	router := setupRouter()
+
+	expectation, err := os.Open("expectation.json")
+	if err != nil {
+		panic("expectation.json not found. Required for configuring mockserver.")
+	}
+
+	http.NewRequest("PUT", LoadedConfig.MockServerBaseUrl, expectation)
 
 	t.Run("Valid Request", func(t *testing.T) {
 		reqBody := map[string]interface{}{
@@ -38,8 +48,13 @@ func TestChatCompletionsProxy(t *testing.T) {
 		assert.NoError(t, err)
 
 		assert.Equal(t, "chat.completion", response["object"])
-		assert.Equal(t, "gpt-3.5-turbo", response["model"])
+		assert.Equal(t, "openai/gpt-3.5-turbo", response["model"])
+
 		assert.NotEmpty(t, response["choices"])
+		choices := response["choices"].([]interface{})
+		firstChoice := choices[0].(map[string]interface{})
+		message := firstChoice["message"].(map[string]interface{})
+		assert.Equal(t, "Hello, world!", message["content"])
 	})
 
 	t.Run("Invalid Request - Missing Model", func(t *testing.T) {

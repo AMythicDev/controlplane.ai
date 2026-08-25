@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"slices"
+	"strings"
 
 	"github.com/anthropics/anthropic-sdk-go"
 	anthropicoption "github.com/anthropics/anthropic-sdk-go/option"
@@ -12,16 +14,44 @@ import (
 	"google.golang.org/genai"
 )
 
+var SUPPORTED_PROVIDERS = [5]string{"anthropic", "google", "openai", "openrouter", "nvidia"}
+
+func extractProviderModel(spec string) (string, string, error) {
+	split_spec := strings.SplitN(spec, "/", 2)
+	if len(split_spec) != 2 {
+		return "", "", fmt.Errorf("invalid format spec: '%s'", spec)
+	}
+
+	provider := split_spec[0]
+	model := split_spec[1]
+
+	if !slices.Contains(SUPPORTED_PROVIDERS[:], provider) {
+		return "", "", fmt.Errorf("invalid provider: '%s'", provider)
+	}
+
+	return provider, model, nil
+}
+
 type ChatMessage struct {
 	Role    string
 	Content string
 }
 
-func callProvider(ctx context.Context, provider string, model string, messages []ChatMessage) (string, error) {
+type ChatResponse struct {
+	Content  string
+	Logprobs []float32
+}
+
+func callProvider(ctx context.Context, provider string, model string, messages []ChatMessage) (ChatResponse, error) {
 	switch provider {
 	case "openai":
-		client := openai.NewClient(option.WithAPIKey(os.Getenv("OPENAI_API_KEY")))
-		
+		var clientOpts []option.RequestOption
+		clientOpts = append(clientOpts, option.WithAPIKey(os.Getenv("OPENAI_API_KEY")))
+		if LoadedConfig.Enviroment == "testing" {
+			clientOpts = append(clientOpts, option.WithBaseURL(LoadedConfig.MockServerBaseUrl))
+		}
+		client := openai.NewClient(clientOpts...)
+
 		var openAIMessages []openai.ChatCompletionMessageParamUnion
 		for _, m := range messages {
 			if m.Role == "user" {
@@ -32,25 +62,36 @@ func callProvider(ctx context.Context, provider string, model string, messages [
 				openAIMessages = append(openAIMessages, openai.SystemMessage(m.Content))
 			}
 		}
-		
+
 		resp, err := client.Chat.Completions.New(ctx, openai.ChatCompletionNewParams{
 			Model:    openai.ChatModel(model),
 			Messages: openAIMessages,
+			Logprobs: openai.Bool(true),
 		})
 		if err != nil {
-			return "", err
+			return ChatResponse{}, err
 		}
 		if len(resp.Choices) > 0 {
-			return resp.Choices[0].Message.Content, nil
+			var logprobs []float32
+			if len(resp.Choices[0].Logprobs.Content) > 0 {
+				for _, lp := range resp.Choices[0].Logprobs.Content {
+					logprobs = append(logprobs, float32(lp.Logprob))
+				}
+			}
+			return ChatResponse{Content: resp.Choices[0].Message.Content, Logprobs: logprobs}, nil
 		}
-		return "", fmt.Errorf("no response from OpenAI")
+		return ChatResponse{}, fmt.Errorf("no response from OpenAI")
 
 	case "openrouter":
-		client := openai.NewClient(
-			option.WithBaseURL("https://openrouter.ai/api/v1"),
-			option.WithAPIKey(os.Getenv("OPENROUTER_API_KEY")),
-		)
-		
+		var clientOpts []option.RequestOption
+		clientOpts = append(clientOpts, option.WithAPIKey(os.Getenv("OPENROUTER_API_KEY")))
+		if LoadedConfig.Enviroment == "testing" {
+			clientOpts = append(clientOpts, option.WithBaseURL(LoadedConfig.MockServerBaseUrl))
+		} else {
+			clientOpts = append(clientOpts, option.WithBaseURL("https://openrouter.ai/api/v1"))
+		}
+		client := openai.NewClient(clientOpts...)
+
 		var openAIMessages []openai.ChatCompletionMessageParamUnion
 		for _, m := range messages {
 			if m.Role == "user" {
@@ -61,25 +102,30 @@ func callProvider(ctx context.Context, provider string, model string, messages [
 				openAIMessages = append(openAIMessages, openai.SystemMessage(m.Content))
 			}
 		}
-		
+
 		resp, err := client.Chat.Completions.New(ctx, openai.ChatCompletionNewParams{
 			Model:    openai.ChatModel(model),
 			Messages: openAIMessages,
 		})
 		if err != nil {
-			return "", err
+			return ChatResponse{}, err
 		}
 		if len(resp.Choices) > 0 {
-			return resp.Choices[0].Message.Content, nil
+			return ChatResponse{Content: resp.Choices[0].Message.Content}, nil
 		}
-		return "", fmt.Errorf("no response from OpenRouter")
+		return ChatResponse{}, fmt.Errorf("no response from OpenRouter")
 
 	case "anthropic":
-		client := anthropic.NewClient(anthropicoption.WithAPIKey(os.Getenv("ANTHROPIC_API_KEY")))
-		
+		var clientOpts []anthropicoption.RequestOption
+		clientOpts = append(clientOpts, anthropicoption.WithAPIKey(os.Getenv("ANTHROPIC_API_KEY")))
+		if LoadedConfig.Enviroment == "testing" {
+			clientOpts = append(clientOpts, anthropicoption.WithBaseURL(LoadedConfig.MockServerBaseUrl))
+		}
+		client := anthropic.NewClient(clientOpts...)
+
 		var anthropicMessages []anthropic.MessageParam
 		var systemPrompt string
-		
+
 		for _, m := range messages {
 			if m.Role == "user" {
 				anthropicMessages = append(anthropicMessages, anthropic.NewUserMessage(anthropic.NewTextBlock(m.Content)))
@@ -89,48 +135,54 @@ func callProvider(ctx context.Context, provider string, model string, messages [
 				systemPrompt = m.Content
 			}
 		}
-		
+
 		params := anthropic.MessageNewParams{
 			Model:     anthropic.Model(model),
 			MaxTokens: 4096,
 			Messages:  anthropicMessages,
 		}
-		
+
 		if systemPrompt != "" {
 			params.System = []anthropic.TextBlockParam{
 				{Text: systemPrompt},
 			}
 		}
-		
+
 		resp, err := client.Messages.New(ctx, params)
 		if err != nil {
-			return "", err
+			return ChatResponse{}, err
 		}
 		if len(resp.Content) > 0 {
-			return resp.Content[0].Text, nil
+			return ChatResponse{Content: resp.Content[0].Text}, nil
 		}
-		return "", fmt.Errorf("no response from Anthropic")
+		return ChatResponse{}, fmt.Errorf("no response from Anthropic")
 
 	case "google":
-		client, err := genai.NewClient(ctx, &genai.ClientConfig{
+		clientConfig := &genai.ClientConfig{
 			APIKey: os.Getenv("GEMINI_API_KEY"),
-		})
-		if err != nil {
-			return "", err
 		}
-		
+		if LoadedConfig.Enviroment == "testing" {
+			clientConfig.HTTPOptions = genai.HTTPOptions{
+				BaseURL: LoadedConfig.MockServerBaseUrl,
+			}
+		}
+		client, err := genai.NewClient(ctx, clientConfig)
+		if err != nil {
+			return ChatResponse{}, err
+		}
+
 		var contents []*genai.Content
 		var systemInstruction *genai.Content
-		
+
 		for _, m := range messages {
 			if m.Role == "user" {
 				contents = append(contents, &genai.Content{
-					Role: "user",
+					Role:  "user",
 					Parts: []*genai.Part{{Text: m.Content}},
 				})
 			} else if m.Role == "assistant" {
 				contents = append(contents, &genai.Content{
-					Role: "model",
+					Role:  "model",
 					Parts: []*genai.Part{{Text: m.Content}},
 				})
 			} else if m.Role == "system" {
@@ -139,28 +191,32 @@ func callProvider(ctx context.Context, provider string, model string, messages [
 				}
 			}
 		}
-		
+
 		config := &genai.GenerateContentConfig{}
 		if systemInstruction != nil {
 			config.SystemInstruction = systemInstruction
 		}
-		
+
 		resp, err := client.Models.GenerateContent(ctx, model, contents, config)
 		if err != nil {
-			return "", err
+			return ChatResponse{}, err
 		}
-		
+
 		if len(resp.Candidates) > 0 && len(resp.Candidates[0].Content.Parts) > 0 {
-			return resp.Candidates[0].Content.Parts[0].Text, nil
+			return ChatResponse{Content: resp.Candidates[0].Content.Parts[0].Text}, nil
 		}
-		return "", fmt.Errorf("no response from Google")
+		return ChatResponse{}, fmt.Errorf("no response from Google")
 
 	case "nvidia":
-		client := openai.NewClient(
-			option.WithBaseURL("https://integrate.api.nvidia.com/v1"),
-			option.WithAPIKey(os.Getenv("NVIDIA_API_KEY")),
-		)
-		
+		var clientOpts []option.RequestOption
+		clientOpts = append(clientOpts, option.WithAPIKey(os.Getenv("NVIDIA_API_KEY")))
+		if LoadedConfig.Enviroment == "testing" {
+			clientOpts = append(clientOpts, option.WithBaseURL(LoadedConfig.MockServerBaseUrl))
+		} else {
+			clientOpts = append(clientOpts, option.WithBaseURL("https://integrate.api.nvidia.com/v1"))
+		}
+		client := openai.NewClient(clientOpts...)
+
 		var openAIMessages []openai.ChatCompletionMessageParamUnion
 		for _, m := range messages {
 			if m.Role == "user" {
@@ -171,20 +227,27 @@ func callProvider(ctx context.Context, provider string, model string, messages [
 				openAIMessages = append(openAIMessages, openai.SystemMessage(m.Content))
 			}
 		}
-		
+
 		resp, err := client.Chat.Completions.New(ctx, openai.ChatCompletionNewParams{
 			Model:    openai.ChatModel(model),
 			Messages: openAIMessages,
+			Logprobs: openai.Bool(true),
 		})
 		if err != nil {
-			return "", err
+			return ChatResponse{}, err
 		}
 		if len(resp.Choices) > 0 {
-			return resp.Choices[0].Message.Content, nil
+			var logprobs []float32
+			if len(resp.Choices[0].Logprobs.Content) > 0 {
+				for _, lp := range resp.Choices[0].Logprobs.Content {
+					logprobs = append(logprobs, float32(lp.Logprob))
+				}
+			}
+			return ChatResponse{Content: resp.Choices[0].Message.Content, Logprobs: logprobs}, nil
 		}
-		return "", fmt.Errorf("no response from NVIDIA")
+		return ChatResponse{}, fmt.Errorf("no response from NVIDIA")
 
 	default:
-		return "", fmt.Errorf("unsupported provider: %s", provider)
+		return ChatResponse{}, fmt.Errorf("unsupported provider: %s", provider)
 	}
 }
