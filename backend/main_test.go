@@ -3,10 +3,12 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"log"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -24,7 +26,17 @@ func TestChatCompletionsProxy(t *testing.T) {
 		panic("expectation.json not found. Required for configuring mockserver.")
 	}
 
-	http.NewRequest("PUT", LoadedConfig.MockServerBaseUrl, expectation)
+	req, _ := http.NewRequest("PUT", "http://localhost:1080/mockserver/expectation", expectation)
+	req.Header.Set("Content-Type", "application/json")
+	client := &http.Client{
+		Timeout: 10 * time.Second,
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		log.Fatal("failed to configure mockserver")
+		return
+	}
+	resp.Body.Close()
 
 	t.Run("Valid Request", func(t *testing.T) {
 		reqBody := map[string]interface{}{

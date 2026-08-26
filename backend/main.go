@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
 )
@@ -91,6 +92,7 @@ func setupRouter() *gin.Engine {
 
 		// Call provider
 		responseContent, err := callProvider(c.Request.Context(), provider, model, chatMessages)
+
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"error": gin.H{
@@ -136,9 +138,7 @@ func setupRouter() *gin.Engine {
 		})
 	})
 
-	// Get total cost accumulated
 	r.GET("/v1/cost", func(c *gin.Context) {
-		// Hardcoded user ID for MVP
 		userID := "user_mvp_123"
 
 		currentSpend, err := GetCurrentSpend(c.Request.Context(), userID)
@@ -151,6 +151,119 @@ func setupRouter() *gin.Engine {
 			"user_id":         userID,
 			"cost_microcents": currentSpend,
 			"cost_dollars":    float64(currentSpend) / 1000000.0,
+		})
+	})
+
+	r.GET("/v1/config", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{
+			"per_user_daily_limit":   BudgetGuardRails.PerUserDailyLimit,
+			"per_user_monthly_limit": BudgetGuardRails.PerUserMonthlyLimit,
+		})
+	})
+
+	r.POST("/v1/config", func(c *gin.Context) {
+		var req struct {
+			PerUserDailyLimit   *int64 `json:"per_user_daily_limit"`
+			PerUserMonthlyLimit *int64 `json:"per_user_monthly_limit"`
+		}
+
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+
+		ctx := c.Request.Context()
+
+		if req.PerUserDailyLimit != nil {
+			BudgetGuardRails.PerUserDailyLimit = *req.PerUserDailyLimit
+			rdb.Set(ctx, "config:per_user_daily_limit", *req.PerUserDailyLimit, 0)
+		}
+
+		if req.PerUserMonthlyLimit != nil {
+			BudgetGuardRails.PerUserMonthlyLimit = *req.PerUserMonthlyLimit
+			rdb.Set(ctx, "config:per_user_monthly_limit", *req.PerUserMonthlyLimit, 0)
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"per_user_daily_limit":   BudgetGuardRails.PerUserDailyLimit,
+			"per_user_monthly_limit": BudgetGuardRails.PerUserMonthlyLimit,
+		})
+	})
+
+	r.POST("/v1/playground", func(c *gin.Context) {
+		// Hardcoded user ID for MVP
+		userID := "user_mvp_123"
+
+		// 1. Guardrail: Check Budget Before Processing
+		if err := CheckBudget(c.Request.Context(), userID); err != nil {
+			if err.Error() == "daily budget exceeded" {
+				c.JSON(http.StatusTooManyRequests, gin.H{
+					"error": "Daily budget exceeded. Please try again tomorrow.",
+				})
+				return
+			}
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+
+		var req struct {
+			Prompt    string `json:"prompt" binding:"required"`
+			ModelSpec string `json:"model_spec" binding:"required"`
+		}
+
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+
+		provider, model, err := extractProviderModel(req.ModelSpec)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+
+		messages := []ChatMessage{
+			{Role: "user", Content: req.Prompt},
+		}
+
+		// Track latency
+		start := time.Now()
+		responseContent, err := callProvider(c.Request.Context(), provider, model, messages)
+		latencyMs := time.Since(start).Milliseconds()
+
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+
+		// Calculate confidence and perplexity if logprobs exist
+		var conf, perp *float32
+		if len(responseContent.Logprobs) > 0 {
+			c, p := confidenceScore(responseContent.Logprobs)
+			// convert 0-1 confidence back to 0-100 percentage for UI
+			cPercent := c * 100
+			conf = &cPercent
+			perp = &p
+		}
+
+		// 2. Track Cost: Simulate cost recording for MVP (e.g., $0.01 per request)
+		simulatedCostMicrocents := int64(10000 * 100) // 1 cent = 10,000 microcents
+		simulatedCostDollars := 0.01
+
+		go func() {
+			if err := RecordSpend(context.Background(), userID, simulatedCostMicrocents); err != nil {
+				log.Printf("Error recording spend for %s: %v", userID, err)
+			}
+		}()
+
+		c.JSON(http.StatusOK, gin.H{
+			"model":      model,
+			"provider":   provider,
+			"content":    responseContent.Content,
+			"confidence": conf,
+			"perplexity": perp,
+			"latency_ms": latencyMs,
+			"cost":       simulatedCostDollars,
 		})
 	})
 

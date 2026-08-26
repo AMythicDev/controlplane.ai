@@ -36,16 +36,34 @@
 	};
 
 	let liveCost = $state<number>(0);
+	let userDailyLimit = $state<number>(50);
+	let userMonthlyLimit = $state<number>(1500);
+
+	let burnPercent = $derived(userMonthlyLimit > 0 ? Math.min(100, Math.round((liveCost / userMonthlyLimit) * 100)) : (liveCost > 0 ? 100 : 0));
 
 	onMount(async () => {
 		try {
-			const res = await fetch('/v1/cost');
-			if (res.ok) {
-				const data = await res.json();
-				liveCost = data.cost_dollars;
+			const [costRes, configRes] = await Promise.all([
+				fetch('/v1/cost'),
+				fetch('/v1/config')
+			]);
+
+			if (costRes.ok) {
+				const costData = await costRes.json();
+				liveCost = costData.cost_dollars;
+			}
+
+			if (configRes.ok) {
+				const configData = await configRes.json();
+				if (configData.per_user_daily_limit !== undefined) {
+					userDailyLimit = configData.per_user_daily_limit / 1000000;
+				}
+				if (configData.per_user_monthly_limit !== undefined) {
+					userMonthlyLimit = configData.per_user_monthly_limit / 1000000;
+				}
 			}
 		} catch (e) {
-			console.error('Failed to fetch live cost', e);
+			console.error('Failed to fetch dashboard data', e);
 		}
 	});
 </script>
@@ -262,7 +280,7 @@
 				<div
 					class="relative flex h-48 w-4 flex-col justify-end overflow-hidden rounded-full border border-elevated bg-surface/50 shadow-inner"
 				>
-					<div class="relative h-[68%] w-full bg-gradient-to-t from-accent-cost to-accent-cost">
+					<div class="relative w-full bg-gradient-to-t from-accent-cost to-accent-cost transition-all duration-1000" style="height: {burnPercent}%;">
 						<div class="absolute top-0 right-0 left-0 h-1 bg-white/50"></div>
 					</div>
 				</div>
@@ -271,8 +289,8 @@
 					class="absolute top-1/2 left-1/2 z-10 flex -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-1 rounded-xl border border-elevated bg-base/80 p-3 whitespace-nowrap opacity-0 shadow-2xl backdrop-blur-md transition-opacity group-hover:opacity-100"
 				>
 					<span class="text-xs tracking-widest text-secondary uppercase">Burn Rate</span>
-					<span class="font-mono text-xl font-bold text-accent-cost">$1.2k / $1.8k</span>
-					<span class="text-[10px] text-secondary">68% of Monthly Budget</span>
+					<span class="font-mono text-xl font-bold text-accent-cost">${formatNum(liveCost)} / ${formatNum(userMonthlyLimit)}</span>
+					<span class="text-[10px] text-secondary">{burnPercent}% of Monthly Budget</span>
 				</div>
 			</div>
 

@@ -1,22 +1,30 @@
 services:
   presidio-analyzer:
-    build: pii-detection/
+    build: backend/pii-detection/
     container_name: presidio-analyzer
     ports:
       - '5000:3000'
+
   presidio-anonymizer:
     image: ghcr.io/data-privacy-stack/presidio-anonymizer:latest
     container_name: presidio-anonymizer
     ports:
       - '5001:3000'
+
   redis:
     image: docker.io/library/redis:alpine
     container_name: redis
     ports:
       - '6379:6379'
+
   mockserver:
     image: docker.io/mockserver/mockserver
     container_name: mockserver
     ports:
       - '1080:1080'
     profiles: [testing]
+
+  mongodb:
+    image: docker.io/library/mongo:latest
+    environment:
+      - GLIBC_TUNABLES=glibc.pthread.rseq=1

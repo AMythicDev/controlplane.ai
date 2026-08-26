@@ -10,8 +10,10 @@ import (
 	"log"
 )
 
-// DailyBudgetMicroCents represents a $5.00 daily limit (5,000,000 microcents)
-const DailyBudgetMicroCents int64 = 50_000_000
+var BudgetGuardRails struct {
+	PerUserDailyLimit   int64
+	PerUserMonthlyLimit int64
+}
 
 var rdb *redis.Client
 
@@ -31,6 +33,19 @@ func InitRedis() {
 	_, err := rdb.Ping(pingCtx).Result()
 	if err != nil {
 		log.Fatalf("Redis is NOT available: %v", err)
+	}
+
+	// Load per-user limits from Redis
+	if dailyLimit, err := rdb.Get(ctx, "config:per_user_daily_limit").Int64(); err == nil {
+		BudgetGuardRails.PerUserDailyLimit = dailyLimit
+	} else {
+		BudgetGuardRails.PerUserDailyLimit = 0
+	}
+
+	if monthlyLimit, err := rdb.Get(ctx, "config:per_user_monthly_limit").Int64(); err == nil {
+		BudgetGuardRails.PerUserMonthlyLimit = monthlyLimit
+	} else {
+		BudgetGuardRails.PerUserMonthlyLimit = BudgetGuardRails.PerUserDailyLimit * 30
 	}
 }
 
@@ -54,7 +69,7 @@ func CheckBudget(ctx context.Context, userID string) error {
 		return fmt.Errorf("redis error checking budget: %w", err)
 	}
 
-	if currentSpend > DailyBudgetMicroCents {
+	if currentSpend >= BudgetGuardRails.PerUserDailyLimit {
 		return errors.New("daily budget exceeded")
 	}
 

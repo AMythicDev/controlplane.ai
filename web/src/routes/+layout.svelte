@@ -9,6 +9,7 @@
     const path = $page.url.pathname;
     if (path === '/') return 'Mission Control';
     if (path.startsWith('/requests')) return 'Request Telemetry';
+    if (path.startsWith('/playground')) return 'LLM Playground';
     if (path.startsWith('/policies')) return 'Policy Engine';
     if (path.startsWith('/review')) return 'Review Queue';
     if (path.startsWith('/settings')) return 'System Settings';

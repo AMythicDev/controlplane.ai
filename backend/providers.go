@@ -37,9 +37,19 @@ type ChatMessage struct {
 	Content string
 }
 
+type TokenLogprob struct {
+	Token   string  `json:"token"`
+	Logprob float64 `json:"logprob"`
+}
+
+type Logprobs = struct {
+	TokenLogprob
+	TopLogprobs []TokenLogprob `json:"top_logprobs"`
+}
+
 type ChatResponse struct {
 	Content  string
-	Logprobs []float32
+	Logprobs []Logprobs
 }
 
 func callProvider(ctx context.Context, provider string, model string, messages []ChatMessage) (ChatResponse, error) {
@@ -72,10 +82,23 @@ func callProvider(ctx context.Context, provider string, model string, messages [
 			return ChatResponse{}, err
 		}
 		if len(resp.Choices) > 0 {
-			var logprobs []float32
+			var logprobs []Logprobs
 			if len(resp.Choices[0].Logprobs.Content) > 0 {
 				for _, lp := range resp.Choices[0].Logprobs.Content {
-					logprobs = append(logprobs, float32(lp.Logprob))
+					var topLogprobs []TokenLogprob
+					for _, top := range lp.TopLogprobs {
+						topLogprobs = append(topLogprobs, TokenLogprob{
+							Token:   top.Token,
+							Logprob: top.Logprob,
+						})
+					}
+					logprobs = append(logprobs, Logprobs{
+						TokenLogprob: TokenLogprob{
+							Token:   lp.Token,
+							Logprob: lp.Logprob,
+						},
+						TopLogprobs: topLogprobs,
+					})
 				}
 			}
 			return ChatResponse{Content: resp.Choices[0].Message.Content, Logprobs: logprobs}, nil
@@ -237,10 +260,23 @@ func callProvider(ctx context.Context, provider string, model string, messages [
 			return ChatResponse{}, err
 		}
 		if len(resp.Choices) > 0 {
-			var logprobs []float32
+			var logprobs []Logprobs
 			if len(resp.Choices[0].Logprobs.Content) > 0 {
 				for _, lp := range resp.Choices[0].Logprobs.Content {
-					logprobs = append(logprobs, float32(lp.Logprob))
+					var topLogprobs []TokenLogprob
+					for _, top := range lp.TopLogprobs {
+						topLogprobs = append(topLogprobs, TokenLogprob{
+							Token:   top.Token,
+							Logprob: top.Logprob,
+						})
+					}
+					logprobs = append(logprobs, Logprobs{
+						TokenLogprob: TokenLogprob{
+							Token:   lp.Token,
+							Logprob: lp.Logprob,
+						},
+						TopLogprobs: topLogprobs,
+					})
 				}
 			}
 			return ChatResponse{Content: resp.Choices[0].Message.Content, Logprobs: logprobs}, nil

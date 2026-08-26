@@ -3,6 +3,7 @@
   import LayoutDashboard from 'lucide-svelte/icons/layout-dashboard';
   import Activity from 'lucide-svelte/icons/activity';
   import ShieldAlert from 'lucide-svelte/icons/shield-alert';
+  import FlaskConical from 'lucide-svelte/icons/flask-conical';
   import CheckSquare from 'lucide-svelte/icons/check-square';
   import Settings from 'lucide-svelte/icons/settings';
   import Bell from 'lucide-svelte/icons/bell';
@@ -12,6 +13,7 @@
   const navItems = [
     { href: '/', label: 'Observatory', icon: LayoutDashboard },
     { href: '/requests', label: 'Activity', icon: Activity },
+    { href: '/playground', label: 'Playground', icon: FlaskConical },
     { href: '/policies', label: 'Directives', icon: ShieldAlert },
     { href: '/review', label: 'Review', icon: CheckSquare },
     { href: '/settings', label: 'Config', icon: Settings }
