@@ -4,7 +4,6 @@
     import Loader2 from 'lucide-svelte/icons/loader-2';
     import Clock from 'lucide-svelte/icons/clock';
     import DollarSign from 'lucide-svelte/icons/dollar-sign';
-    import Activity from 'lucide-svelte/icons/activity';
 
     let { result, isLoading, providerColor, providerName, modelName } = $props<{
         result: MockResult | null;
@@ -103,20 +102,6 @@
                             <DollarSign class="w-3 h-3" /> Cost
                         </span>
                         <span class="font-mono text-sm text-accent-cost">{formatCost(result.cost)}</span>
-                    </div>
-                    
-                    <!-- Perplexity -->
-                    <div class="flex flex-col items-end">
-                        <span class="text-[9px] tracking-widest text-secondary uppercase opacity-60 flex items-center gap-1">
-                            <Activity class="w-3 h-3" /> Perplexity
-                        </span>
-                        <span class="font-mono text-sm text-primary">
-                            {#if result.perplexity !== null}
-                                {result.perplexity.toFixed(3)}
-                            {:else}
-                                <span class="opacity-50">N/A</span>
-                            {/if}
-                        </span>
                     </div>
                 </div>
             </div>

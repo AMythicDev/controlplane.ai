@@ -56,8 +56,8 @@ export const modelCatalog: ProviderGroup[] = [
         name: 'NVIDIA',
         color: '#76b900',
         models: [
-            { id: 'meta/llama-3.3-70b-instruct', name: 'Llama 3.3 70B', provider: 'nvidia', spec: 'nvidia/meta/llama-3.3-70b-instruct' },
-            { id: 'nvidia/llama-3.1-nemotron-ultra-253b-v1', name: 'Nemotron Ultra 253B', provider: 'nvidia', spec: 'nvidia/nvidia/llama-3.1-nemotron-ultra-253b-v1' },
+            { id: 'google/diffusiongemma-26b-a4b-it', name: 'Diffusion Gemma 20B', provider: 'nvidia', spec: 'nvidia/google/diffusiongemma-26b-a4b-it' },
+            { id: 'nvidia/nemotron-3.5-lightning-30b-a3b', name: 'Nemotron 5.3 Lightning 30B', provider: 'nvidia', spec: 'nvidia/nvidia/nemotron-3.5-lightning-30b-a3b' },
         ]
     }
 ];
@@ -67,7 +67,6 @@ export interface MockResult {
     provider: string;
     content: string;
     confidence: number | null;
-    perplexity: number | null;
     latency_ms: number;
     cost: number;
 }
@@ -93,7 +92,6 @@ export const runPlaygroundRequest = async (prompt: string, modelSpec: string): P
         provider: data.provider,
         content: data.content,
         confidence: data.confidence,
-        perplexity: data.perplexity,
         latency_ms: data.latency_ms,
         cost: data.cost
     };

@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"net/http"
 	"time"
@@ -10,12 +9,13 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-type Config struct {
+var LoadedConfig struct {
 	Enviroment        string
 	MockServerBaseUrl string
-}
-
-var LoadedConfig = Config{
+} = struct {
+	Enviroment        string
+	MockServerBaseUrl string
+}{
 	Enviroment:        "testing",
 	MockServerBaseUrl: "http://localhost:1080/v1",
 }
@@ -103,18 +103,11 @@ func setupRouter() *gin.Engine {
 			return
 		}
 
-		if len(responseContent.Logprobs) > 0 {
-			conf, perp := confidenceScore(responseContent.Logprobs)
-			fmt.Printf("Confidence: %.2f%%, Perplexity: %.2f\n", conf*100, perp)
-		}
-
-		// 2. Track Cost: Simulate cost recording for MVP (e.g., $0.01 per request)
-		// In production, this happens AFTER receiving the provider response and token usage
-		simulatedCost := int64(10000 * 100) // 1 cent = 10,000 microcents
+		conf := confidenceScore(responseContent.Logprobs)
 
 		// We use background context here so tracking completes even if the client disconnects early
 		go func() {
-			if err := RecordSpend(context.Background(), userID, simulatedCost); err != nil {
+			if err := RecordSpend(context.Background(), userID, responseContent.Cost); err != nil {
 				log.Printf("Error recording spend for %s: %v", userID, err)
 			}
 		}()
@@ -131,11 +124,12 @@ func setupRouter() *gin.Engine {
 
 		// Return response
 		c.JSON(http.StatusOK, gin.H{
-			"id":      "chatcmpl-" + provider,
-			"object":  "chat.completion",
-			"created": 1700000000,
-			"model":   req.Model,
-			"choices": []gin.H{choice},
+			"id":         "chatcmpl-" + provider,
+			"object":     "chat.completion",
+			"created":    1700000000,
+			"model":      req.Model,
+			"confidence": conf,
+			"choices":    []gin.H{choice},
 		})
 	})
 
@@ -237,22 +231,16 @@ func setupRouter() *gin.Engine {
 			return
 		}
 
-		// Calculate confidence and perplexity if logprobs exist
-		var conf, perp *float32
+		var conf *float32
 		if len(responseContent.Logprobs) > 0 {
-			c, p := confidenceScore(responseContent.Logprobs)
+			c := confidenceScore(responseContent.Logprobs)
 			// convert 0-1 confidence back to 0-100 percentage for UI
 			cPercent := c * 100
 			conf = &cPercent
-			perp = &p
 		}
 
-		// 2. Track Cost: Simulate cost recording for MVP (e.g., $0.01 per request)
-		simulatedCostMicrocents := int64(10000 * 100) // 1 cent = 10,000 microcents
-		simulatedCostDollars := 0.01
-
 		go func() {
-			if err := RecordSpend(context.Background(), userID, simulatedCostMicrocents); err != nil {
+			if err := RecordSpend(context.Background(), userID, responseContent.Cost); err != nil {
 				log.Printf("Error recording spend for %s: %v", userID, err)
 			}
 		}()
@@ -262,9 +250,8 @@ func setupRouter() *gin.Engine {
 			"provider":   provider,
 			"content":    responseContent.Content,
 			"confidence": conf,
-			"perplexity": perp,
 			"latency_ms": latencyMs,
-			"cost":       simulatedCostDollars,
+			"cost":       responseContent.Cost / 1_000_000,
 		})
 	})
 

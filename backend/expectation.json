@@ -14,7 +14,9 @@
     "httpResponse": {
       "statusCode": 200,
       "headers": {
-        "Content-Type": ["application/json"]
+        "Content-Type": [
+          "application/json"
+        ]
       },
       "body": {
         "id": "chatcmpl-mock123",
@@ -33,41 +35,153 @@
                 {
                   "token": "Hello",
                   "logprob": -0.0123,
-                  "bytes": [72, 101, 108, 108, 111],
+                  "bytes": [
+                    72,
+                    101,
+                    108,
+                    108,
+                    111
+                  ],
                   "top_logprobs": [
-                    { "token": "Hello", "logprob": -0.0123, "bytes": [72, 101, 108, 108, 111] },
-                    { "token": "Hi",    "logprob": -2.31,   "bytes": [72, 105] },
-                    { "token": "Hey",   "logprob": -3.87,   "bytes": [72, 101, 121] }
+                    {
+                      "token": "Hello",
+                      "logprob": -0.0123,
+                      "bytes": [
+                        72,
+                        101,
+                        108,
+                        108,
+                        111
+                      ]
+                    },
+                    {
+                      "token": "Hi",
+                      "logprob": -2.31,
+                      "bytes": [
+                        72,
+                        105
+                      ]
+                    },
+                    {
+                      "token": "Hey",
+                      "logprob": -3.87,
+                      "bytes": [
+                        72,
+                        101,
+                        121
+                      ]
+                    }
                   ]
                 },
                 {
                   "token": ",",
                   "logprob": -0.045,
-                  "bytes": [44],
+                  "bytes": [
+                    44
+                  ],
                   "top_logprobs": [
-                    { "token": ",",  "logprob": -0.045, "bytes": [44] },
-                    { "token": "!",  "logprob": -1.92,  "bytes": [33] },
-                    { "token": " ",  "logprob": -4.10,  "bytes": [32] }
+                    {
+                      "token": ",",
+                      "logprob": -0.045,
+                      "bytes": [
+                        44
+                      ]
+                    },
+                    {
+                      "token": "!",
+                      "logprob": -1.92,
+                      "bytes": [
+                        33
+                      ]
+                    },
+                    {
+                      "token": " ",
+                      "logprob": -4.10,
+                      "bytes": [
+                        32
+                      ]
+                    }
                   ]
                 },
                 {
                   "token": " world",
                   "logprob": -0.31,
-                  "bytes": [32, 119, 111, 114, 108, 100],
+                  "bytes": [
+                    32,
+                    119,
+                    111,
+                    114,
+                    108,
+                    100
+                  ],
                   "top_logprobs": [
-                    { "token": " world",  "logprob": -0.31, "bytes": [32, 119, 111, 114, 108, 100] },
-                    { "token": " there",  "logprob": -1.55, "bytes": [32, 116, 104, 101, 114, 101] },
-                    { "token": " friend", "logprob": -2.98, "bytes": [32, 102, 114, 105, 101, 110, 100] }
+                    {
+                      "token": " world",
+                      "logprob": -0.31,
+                      "bytes": [
+                        32,
+                        119,
+                        111,
+                        114,
+                        108,
+                        100
+                      ]
+                    },
+                    {
+                      "token": " there",
+                      "logprob": -1.55,
+                      "bytes": [
+                        32,
+                        116,
+                        104,
+                        101,
+                        114,
+                        101
+                      ]
+                    },
+                    {
+                      "token": " friend",
+                      "logprob": -2.98,
+                      "bytes": [
+                        32,
+                        102,
+                        114,
+                        105,
+                        101,
+                        110,
+                        100
+                      ]
+                    }
                   ]
                 },
                 {
                   "token": "!",
                   "logprob": -0.02,
-                  "bytes": [33],
+                  "bytes": [
+                    33
+                  ],
                   "top_logprobs": [
-                    { "token": "!", "logprob": -0.02, "bytes": [33] },
-                    { "token": ".", "logprob": -3.44, "bytes": [46] },
-                    { "token": "?", "logprob": -4.76, "bytes": [63] }
+                    {
+                      "token": "!",
+                      "logprob": -0.02,
+                      "bytes": [
+                        33
+                      ]
+                    },
+                    {
+                      "token": ".",
+                      "logprob": -3.44,
+                      "bytes": [
+                        46
+                      ]
+                    },
+                    {
+                      "token": "?",
+                      "logprob": -4.76,
+                      "bytes": [
+                        63
+                      ]
+                    }
                   ]
                 }
               ],
@@ -93,7 +207,9 @@
     "httpResponse": {
       "statusCode": 200,
       "headers": {
-        "Content-Type": ["application/json"]
+        "Content-Type": [
+          "application/json"
+        ]
       },
       "body": {
         "id": "chatcmpl-mock124",
@@ -119,5 +235,29 @@
       }
     },
     "priority": -1
+  },
+  {
+    "httpRequest": {
+      "method": "POST",
+      "path": "/v1/messages"
+    },
+    "httpLlmResponse": {
+      "provider": "ANTHROPIC",
+      "completion": {
+        "text": "MockServer is a free, open-source HTTP mock server.",
+      }
+    }
+  },
+  {
+    "httpRequest": {
+      "method": "POST",
+      "path": "/v1beta/models/gemini-3.7-flash:generateContent"
+    },
+    "httpLlmResponse": {
+      "provider": "GEMINI",
+      "completion": {
+        "text": "MockServer is a free, open-source HTTP mock server.",
+      }
+    }
   }
 ]

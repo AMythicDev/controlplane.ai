@@ -110,9 +110,8 @@ func TestChatCompletionsProxy(t *testing.T) {
 
 func TestConfidenceScore(t *testing.T) {
 	t.Run("Empty logprobs slice", func(t *testing.T) {
-		conf, perp := confidenceScore([]Logprobs{})
+		conf := confidenceScore([]Logprobs{})
 		assert.Equal(t, float32(1.0), conf)
-		assert.Equal(t, float32(1.0), perp)
 	})
 
 	t.Run("Perfect certainty (logprob = 0.0, P = 1.0)", func(t *testing.T) {
@@ -122,9 +121,8 @@ func TestConfidenceScore(t *testing.T) {
 			{TokenLogprob: TokenLogprob{Token: "is", Logprob: 0.0}},
 			{TokenLogprob: TokenLogprob{Token: "Paris", Logprob: 0.0}},
 		}
-		conf, perp := confidenceScore(logprobs)
+		conf := confidenceScore(logprobs)
 		assert.InDelta(t, float32(1.0), conf, 1e-4)
-		assert.InDelta(t, float32(1.0), perp, 1e-4)
 	})
 
 	t.Run("Perplexity ~ 1.23", func(t *testing.T) {
@@ -132,8 +130,7 @@ func TestConfidenceScore(t *testing.T) {
 		logprobs := []Logprobs{
 			{TokenLogprob: TokenLogprob{Token: "test", Logprob: targetLogprob}},
 		}
-		conf, perp := confidenceScore(logprobs)
-		assert.InDelta(t, float32(1.23), perp, 1e-2)
+		conf := confidenceScore(logprobs)
 		assert.InDelta(t, float32(1.0/1.23), conf, 1e-2)
 	})
 
@@ -142,8 +139,7 @@ func TestConfidenceScore(t *testing.T) {
 		logprobs := []Logprobs{
 			{TokenLogprob: TokenLogprob{Token: "test", Logprob: targetLogprob}},
 		}
-		conf, perp := confidenceScore(logprobs)
-		assert.InDelta(t, float32(1.34), perp, 1e-2)
+		conf := confidenceScore(logprobs)
 		assert.InDelta(t, float32(1.0/1.34), conf, 1e-2)
 	})
 
@@ -152,8 +148,7 @@ func TestConfidenceScore(t *testing.T) {
 		logprobs := []Logprobs{
 			{TokenLogprob: TokenLogprob{Token: "test", Logprob: targetLogprob}},
 		}
-		conf, perp := confidenceScore(logprobs)
-		assert.InDelta(t, float32(2.0), perp, 1e-2)
+		conf := confidenceScore(logprobs)
 		assert.InDelta(t, float32(0.50), conf, 1e-2)
 	})
 }

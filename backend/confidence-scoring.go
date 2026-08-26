@@ -11,9 +11,9 @@ import (
 // Confidence is the geometric mean token probability: C = 1 / PPL = exp(avg(logprob)).
 // When PPL = 1.0, confidence is 1.0 (100%).
 // As PPL increases (> 1.0), confidence decreases smoothly towards 0.0.
-func confidenceScore(logprobs []Logprobs) (float32, float32) {
+func confidenceScore(logprobs []Logprobs) float32 {
 	if len(logprobs) == 0 {
-		return 1.0, 1.0
+		return 1.0
 	}
 
 	var sumLogprobs float64
@@ -37,6 +37,5 @@ func confidenceScore(logprobs []Logprobs) (float32, float32) {
 		confidence = 0.0
 	}
 
-	return float32(confidence), float32(perplexity)
+	return float32(confidence)
 }
-

@@ -77,6 +77,7 @@
         const promises = specs.map(async (spec) => {
             try {
                 const res = await runPlaygroundRequest(prompt, spec);
+                console.log(res)
                 results[spec] = res;
             } catch (err: any) {
                 console.error(`Error with ${spec}:`, err);

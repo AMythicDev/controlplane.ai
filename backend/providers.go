@@ -50,9 +50,14 @@ type Logprobs = struct {
 type ChatResponse struct {
 	Content  string
 	Logprobs []Logprobs
+	Cost     int64
 }
 
 func callProvider(ctx context.Context, provider string, model string, messages []ChatMessage) (ChatResponse, error) {
+	// 2. Track Cost: Simulate cost recording for MVP (e.g., $0.01 per request)
+	// In production, this happens AFTER receiving the provider response and token usage
+	simulatedCost := int64(1_000_000) // 1 cent = 10,000 microcents
+
 	switch provider {
 	case "openai":
 		var clientOpts []option.RequestOption
@@ -101,7 +106,7 @@ func callProvider(ctx context.Context, provider string, model string, messages [
 					})
 				}
 			}
-			return ChatResponse{Content: resp.Choices[0].Message.Content, Logprobs: logprobs}, nil
+			return ChatResponse{Content: resp.Choices[0].Message.Content, Logprobs: logprobs, Cost: simulatedCost}, nil
 		}
 		return ChatResponse{}, fmt.Errorf("no response from OpenAI")
 
@@ -134,7 +139,7 @@ func callProvider(ctx context.Context, provider string, model string, messages [
 			return ChatResponse{}, err
 		}
 		if len(resp.Choices) > 0 {
-			return ChatResponse{Content: resp.Choices[0].Message.Content}, nil
+			return ChatResponse{Content: resp.Choices[0].Message.Content, Cost: simulatedCost}, nil
 		}
 		return ChatResponse{}, fmt.Errorf("no response from OpenRouter")
 
@@ -176,7 +181,7 @@ func callProvider(ctx context.Context, provider string, model string, messages [
 			return ChatResponse{}, err
 		}
 		if len(resp.Content) > 0 {
-			return ChatResponse{Content: resp.Content[0].Text}, nil
+			return ChatResponse{Content: resp.Content[0].Text, Cost: simulatedCost}, nil
 		}
 		return ChatResponse{}, fmt.Errorf("no response from Anthropic")
 
@@ -226,7 +231,7 @@ func callProvider(ctx context.Context, provider string, model string, messages [
 		}
 
 		if len(resp.Candidates) > 0 && len(resp.Candidates[0].Content.Parts) > 0 {
-			return ChatResponse{Content: resp.Candidates[0].Content.Parts[0].Text}, nil
+			return ChatResponse{Content: resp.Candidates[0].Content.Parts[0].Text, Cost: simulatedCost}, nil
 		}
 		return ChatResponse{}, fmt.Errorf("no response from Google")
 
@@ -252,10 +257,13 @@ func callProvider(ctx context.Context, provider string, model string, messages [
 		}
 
 		resp, err := client.Chat.Completions.New(ctx, openai.ChatCompletionNewParams{
-			Model:    openai.ChatModel(model),
-			Messages: openAIMessages,
-			Logprobs: openai.Bool(true),
-		})
+			Model:           openai.ChatModel(model),
+			Messages:        openAIMessages,
+			Logprobs:        openai.Bool(true),
+			ReasoningEffort: openai.ReasoningEffortLow,
+		},
+		)
+
 		if err != nil {
 			return ChatResponse{}, err
 		}
