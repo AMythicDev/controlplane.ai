@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"log"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -106,3 +107,54 @@ func TestChatCompletionsProxy(t *testing.T) {
 		assert.Equal(t, model, "gemini-3.1-pro-preview")
 	})
 }
+
+func TestConfidenceScore(t *testing.T) {
+	t.Run("Empty logprobs slice", func(t *testing.T) {
+		conf, perp := confidenceScore([]Logprobs{})
+		assert.Equal(t, float32(1.0), conf)
+		assert.Equal(t, float32(1.0), perp)
+	})
+
+	t.Run("Perfect certainty (logprob = 0.0, P = 1.0)", func(t *testing.T) {
+		logprobs := []Logprobs{
+			{TokenLogprob: TokenLogprob{Token: "The", Logprob: 0.0}},
+			{TokenLogprob: TokenLogprob{Token: "capital", Logprob: 0.0}},
+			{TokenLogprob: TokenLogprob{Token: "is", Logprob: 0.0}},
+			{TokenLogprob: TokenLogprob{Token: "Paris", Logprob: 0.0}},
+		}
+		conf, perp := confidenceScore(logprobs)
+		assert.InDelta(t, float32(1.0), conf, 1e-4)
+		assert.InDelta(t, float32(1.0), perp, 1e-4)
+	})
+
+	t.Run("Perplexity ~ 1.23", func(t *testing.T) {
+		targetLogprob := -math.Log(1.23)
+		logprobs := []Logprobs{
+			{TokenLogprob: TokenLogprob{Token: "test", Logprob: targetLogprob}},
+		}
+		conf, perp := confidenceScore(logprobs)
+		assert.InDelta(t, float32(1.23), perp, 1e-2)
+		assert.InDelta(t, float32(1.0/1.23), conf, 1e-2)
+	})
+
+	t.Run("Perplexity ~ 1.34", func(t *testing.T) {
+		targetLogprob := -math.Log(1.34)
+		logprobs := []Logprobs{
+			{TokenLogprob: TokenLogprob{Token: "test", Logprob: targetLogprob}},
+		}
+		conf, perp := confidenceScore(logprobs)
+		assert.InDelta(t, float32(1.34), perp, 1e-2)
+		assert.InDelta(t, float32(1.0/1.34), conf, 1e-2)
+	})
+
+	t.Run("Perplexity 2.0 (50% confidence)", func(t *testing.T) {
+		targetLogprob := -math.Log(2.0)
+		logprobs := []Logprobs{
+			{TokenLogprob: TokenLogprob{Token: "test", Logprob: targetLogprob}},
+		}
+		conf, perp := confidenceScore(logprobs)
+		assert.InDelta(t, float32(2.0), perp, 1e-2)
+		assert.InDelta(t, float32(0.50), conf, 1e-2)
+	})
+}
+

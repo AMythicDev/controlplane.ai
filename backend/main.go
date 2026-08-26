@@ -104,7 +104,8 @@ func setupRouter() *gin.Engine {
 		}
 
 		if len(responseContent.Logprobs) > 0 {
-			fmt.Println(confidenceScore(responseContent.Logprobs))
+			conf, perp := confidenceScore(responseContent.Logprobs)
+			fmt.Printf("Confidence: %.2f%%, Perplexity: %.2f\n", conf*100, perp)
 		}
 
 		// 2. Track Cost: Simulate cost recording for MVP (e.g., $0.01 per request)
