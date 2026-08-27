@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field
 import uvicorn
 
 from toxicity_scanner.inference import run_inference
+from toxicity_scanner.nli_inference import run_nli
 
 app = FastAPI(
     title="Toxicity Scanner API",
@@ -48,6 +49,19 @@ class ToxicityResult(BaseModel):
 
 class ToxicityResponse(BaseModel):
     results: list[ToxicityResult] = Field(..., description="Analysis results for each input string")
+
+
+class NLIRequest(BaseModel):
+    premise: str = Field(..., description="The source context")
+    hypothesis: str = Field(..., description="The LLM's response to check")
+
+
+class NLIResponse(BaseModel):
+    label: str
+    score: float
+    contradiction_prob: float
+    neutral_prob: float
+    entailment_prob: float
 
 
 @app.get("/", tags=["General"])
@@ -149,6 +163,23 @@ def toxicity_texts(
     payload: Union[ToxicityRequest, list[str]] = Body(...),
 ) -> ToxicityResponse:
     return scan_texts(payload)
+
+
+@app.post(
+    "/nli",
+    response_model=NLIResponse,
+    tags=["NLI"],
+    summary="Verify if a hypothesis is entailed by a premise",
+)
+def nli_verification(req: NLIRequest) -> NLIResponse:
+    try:
+        result = run_nli(req.premise, req.hypothesis)
+        return NLIResponse(**result)
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"NLI Inference failed: {str(e)}",
+        ) from e
 
 
 def main() -> None:
