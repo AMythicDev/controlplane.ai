@@ -1,0 +1,28 @@
+[project]
+name = "toxicity-scanner"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "Arijit Dey", email = "arijit79@protonmail.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.141.1",
+    "numpy>=2.5.2",
+    "onnxruntime>=1.29.0",
+    "transformers>=5.16.1",
+    "uvicorn>=0.52.4",
+]
+
+[project.scripts]
+toxicity-scanner = "toxicity_scanner.main:main"
+
+[build-system]
+requires = ["uv_build>=0.12.5,<0.13.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+]
