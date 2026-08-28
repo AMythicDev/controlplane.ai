@@ -104,6 +104,17 @@ func setupRouter() *gin.Engine {
 		}
 
 		conf := confidenceScore(responseContent.Logprobs)
+		toxicity, err := runToxicityScanner([]string{responseContent.Content})
+
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": gin.H{
+					"message": err.Error(),
+					"type":    "provider_error",
+				},
+			})
+			return
+		}
 
 		// We use background context here so tracking completes even if the client disconnects early
 		go func() {
@@ -129,6 +140,7 @@ func setupRouter() *gin.Engine {
 			"created":    1700000000,
 			"model":      req.Model,
 			"confidence": conf,
+			"toxicity":   toxicity,
 			"choices":    []gin.H{choice},
 		})
 	})
@@ -238,6 +250,17 @@ func setupRouter() *gin.Engine {
 			cPercent := c * 100
 			conf = &cPercent
 		}
+		toxicity, err := runToxicityScanner([]string{responseContent.Content})
+
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": gin.H{
+					"message": err.Error(),
+					"type":    "provider_error",
+				},
+			})
+			return
+		}
 
 		go func() {
 			if err := RecordSpend(context.Background(), userID, responseContent.Cost); err != nil {
@@ -250,6 +273,7 @@ func setupRouter() *gin.Engine {
 			"provider":   provider,
 			"content":    responseContent.Content,
 			"confidence": conf,
+			"toxicity":   toxicity,
 			"latency_ms": latencyMs,
 			"cost":       responseContent.Cost / 1_000_000,
 		})

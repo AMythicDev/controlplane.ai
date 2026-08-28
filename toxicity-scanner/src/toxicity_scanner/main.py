@@ -1,6 +1,5 @@
 import argparse
 import os
-from typing import Union
 from fastapi import Body, FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
@@ -33,22 +32,14 @@ class ToxicityRequest(BaseModel):
     )
 
 
-class ToxicityScores(BaseModel):
-    toxicity: float = Field(..., description="Overall toxicity probability (0.0 - 1.0)")
-    severe_toxicity: float = Field(..., description="Severe toxicity probability (0.0 - 1.0)")
-    obscene: float = Field(..., description="Obscenity probability (0.0 - 1.0)")
-    threat: float = Field(..., description="Threat probability (0.0 - 1.0)")
-    insult: float = Field(..., description="Insult probability (0.0 - 1.0)")
-    identity_attack: float = Field(..., description="Identity attack probability (0.0 - 1.0)")
-
-
 class ToxicityResult(BaseModel):
-    text: str = Field(..., description="Original input text string")
-    scores: ToxicityScores = Field(..., description="Predicted toxicity probabilities across categories")
-
-
-class ToxicityResponse(BaseModel):
-    results: list[ToxicityResult] = Field(..., description="Analysis results for each input string")
+    text: str = Field()
+    toxicity: float = Field()
+    severe_toxicity: float = Field()
+    obscene: float = Field()
+    threat: float = Field()
+    insult: float = Field()
+    identity_attack: float = Field()
 
 
 class NLIRequest(BaseModel):
@@ -64,16 +55,6 @@ class NLIResponse(BaseModel):
     entailment_prob: float
 
 
-@app.get("/", tags=["General"])
-def root() -> dict[str, str]:
-    """Root endpoint returning API status and docs link."""
-    return {
-        "message": "Toxicity Scanner API is running.",
-        "docs": "/docs",
-        "health": "/health",
-    }
-
-
 @app.get("/health", tags=["General"])
 def health() -> dict[str, str]:
     """Health check endpoint."""
@@ -81,27 +62,14 @@ def health() -> dict[str, str]:
 
 
 @app.post(
-    "/scan",
-    response_model=ToxicityResponse,
+    "/toxicity",
+    response_model=list[ToxicityResult],
     tags=["Toxicity"],
     summary="Scan a list of text strings for toxicity",
 )
-def scan_texts(
-    payload: Union[ToxicityRequest, list[str]] = Body(
-        ...,
-        description="A list of strings or an object containing a 'texts' list",
-        openapi_examples={
-            "object_format": {
-                "summary": "Object format",
-                "value": {"texts": ["I love coding!", "Get out of here you fool."]},
-            },
-            "array_format": {
-                "summary": "Array format",
-                "value": ["I love coding!", "Get out of here you fool."],
-            },
-        },
-    ),
-) -> ToxicityResponse:
+def toxicity(
+    payload: ToxicityRequest | list[str] = Body(),
+) -> list[ToxicityResult]:
     """Accepts a list of text strings (either as a JSON array or `{ "texts": [...] }`)
 
     and returns the toxicity scores for each input string.
@@ -110,7 +78,7 @@ def scan_texts(
         texts = payload.texts if isinstance(payload, ToxicityRequest) else payload
 
         if not texts:
-            return ToxicityResponse(results=[])
+            return []
 
         # Validate that all elements are strings
         if not all(isinstance(t, str) for t in texts):
@@ -124,12 +92,12 @@ def scan_texts(
         results = [
             ToxicityResult(
                 text=text,
-                scores=ToxicityScores(**score_dict),
+                **score_dict
             )
             for text, score_dict in zip(texts, raw_scores)
         ]
 
-        return ToxicityResponse(results=results)
+        return results
     except HTTPException:
         raise
     except Exception as e:
@@ -137,33 +105,6 @@ def scan_texts(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Inference failed: {str(e)}",
         ) from e
-
-
-@app.post(
-    "/predict",
-    response_model=ToxicityResponse,
-    tags=["Toxicity"],
-    summary="Alias for /scan",
-    include_in_schema=False,
-)
-def predict_texts(
-    payload: Union[ToxicityRequest, list[str]] = Body(...),
-) -> ToxicityResponse:
-    return scan_texts(payload)
-
-
-@app.post(
-    "/toxicity",
-    response_model=ToxicityResponse,
-    tags=["Toxicity"],
-    summary="Alias for /scan",
-    include_in_schema=False,
-)
-def toxicity_texts(
-    payload: Union[ToxicityRequest, list[str]] = Body(...),
-) -> ToxicityResponse:
-    return scan_texts(payload)
-
 
 @app.post(
     "/nli",

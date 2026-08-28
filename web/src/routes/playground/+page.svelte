@@ -133,8 +133,8 @@
 
     <div class="px-6 lg:px-12 grid grid-cols-1 lg:grid-cols-12 gap-8">
         
-        <!-- Left Column: Controls (Span 4) -->
-        <div class="lg:col-span-4 flex flex-col gap-6">
+        <!-- Left Column: Controls (Span 4, 3 on 2xl) -->
+        <div class="lg:col-span-4 2xl:col-span-3 flex flex-col gap-6">
             
             <!-- Prompt Area -->
             <div class="flex flex-col gap-3 p-1 rounded-2xl border border-elevated bg-surface/50 backdrop-blur shadow-lg overflow-hidden focus-within:border-accent-perf/50 focus-within:ring-1 focus-within:ring-accent-perf/50 transition-all">
@@ -222,8 +222,8 @@
             
         </div>
 
-        <!-- Right Column: Results Grid (Span 8) -->
-        <div class="lg:col-span-8">
+        <!-- Right Column: Results Grid (Span 8, 9 on 2xl) -->
+        <div class="lg:col-span-8 2xl:col-span-9">
             {#if activeModels.length === 0}
                 <div class="h-full min-h-[400px] flex flex-col items-center justify-center border border-dashed border-elevated rounded-2xl bg-surface/10">
                     <div class="w-16 h-16 rounded-full bg-elevated/50 flex items-center justify-center mb-4">
@@ -233,8 +233,7 @@
                     <span class="text-xs text-secondary/60 font-sans max-w-xs text-center">Select models from the matrix on the left to begin comparison.</span>
                 </div>
             {:else}
-                <!-- Grid columns fixed to static Tailwind classes to avoid parsing issues -->
-                <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 w-full items-start">
+                <div class="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-6 w-full items-start">
                     {#each activeModels as item (item.model.spec)}
                         <div class="w-full min-w-0">
                             <ResultCard 

@@ -153,3 +153,82 @@ func TestConfidenceScore(t *testing.T) {
 	})
 }
 
+func TestCalculateSingleToxicityScore(t *testing.T) {
+	t.Run("All zero scores return 0.0", func(t *testing.T) {
+		report := ToxicityScannerReport{}
+		score := calculateSingleToxicityScore(report)
+		assert.Equal(t, float32(0.0), score)
+	})
+
+	t.Run("Clean benign text produces near zero score", func(t *testing.T) {
+		report := ToxicityScannerReport{
+			Toxicity:       0.0006,
+			SevereToxicity: 0.0001,
+			Obscene:        0.0011,
+			Threat:         0.0003,
+			Insult:         0.0008,
+			IdentityAttack: 0.0001,
+		}
+		score := calculateSingleToxicityScore(report)
+		assert.True(t, score < 0.01)
+	})
+
+	t.Run("Critical threat alone spikes overall score", func(t *testing.T) {
+		report := ToxicityScannerReport{
+			Threat: 0.99,
+		}
+		score := calculateSingleToxicityScore(report)
+		assert.InDelta(t, float32(0.99), score, 1e-3)
+	})
+
+	t.Run("Critical severe toxicity alone spikes overall score", func(t *testing.T) {
+		report := ToxicityScannerReport{
+			SevereToxicity: 0.95,
+		}
+		score := calculateSingleToxicityScore(report)
+		assert.InDelta(t, float32(0.95), score, 1e-3)
+	})
+
+	t.Run("Multiple moderate scores compound smoothly", func(t *testing.T) {
+		report := ToxicityScannerReport{
+			Insult:  0.5,
+			Obscene: 0.5,
+		}
+		score := calculateSingleToxicityScore(report)
+		// survival = (1 - 0.6*0.5) * (1 - 0.4*0.5) = 0.70 * 0.80 = 0.56 -> score = 0.44
+		assert.InDelta(t, float32(0.44), score, 1e-2)
+	})
+
+	t.Run("All maximum scores return 1.0 clamped", func(t *testing.T) {
+		report := ToxicityScannerReport{
+			Toxicity:       1.0,
+			SevereToxicity: 1.0,
+			Obscene:        1.0,
+			Threat:         1.0,
+			Insult:         1.0,
+			IdentityAttack: 1.0,
+		}
+		score := calculateSingleToxicityScore(report)
+		assert.Equal(t, float32(1.0), score)
+	})
+}
+
+func TestRunToxicityScanner(t *testing.T) {
+	t.Run("Empty texts returns zero and no error", func(t *testing.T) {
+		score, err := runToxicityScanner([]string{})
+		assert.NoError(t, err)
+		assert.Equal(t, float32(0.0), score)
+	})
+
+	t.Run("Live or mock server with array of reports", func(t *testing.T) {
+		score, err := runToxicityScanner([]string{"you are a nice person", "shut up you dumb"})
+		if err != nil {
+			t.Logf("Toxicity scanner container not running, skipping live check: %v", err)
+			return
+		}
+		assert.True(t, score > 0.0)
+		assert.True(t, score <= 1.0)
+	})
+}
+
+

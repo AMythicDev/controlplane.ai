@@ -1,8 +1,9 @@
 <script lang="ts">
-    let { score, label, dimension } = $props<{
+    let { score, label, dimension, size = 'md' } = $props<{
         score: number;
         label: string;
         dimension: 'performance' | 'cost' | 'responsibility';
+        size?: 'sm' | 'md';
     }>();
 
     let mounted = $state(false);
@@ -27,7 +28,7 @@
 </script>
 
 <div class="flex flex-col items-center">
-    <div class="relative w-32 h-20 overflow-hidden">
+    <div class="relative {size === 'sm' ? 'w-20 h-12' : 'w-32 h-20'} overflow-hidden">
         <svg viewBox="0 0 100 60" class="w-full h-full drop-shadow-lg">
             <!-- Background track -->
             <path
@@ -49,11 +50,11 @@
                 class="transition-all duration-1000 ease-out"
             />
         </svg>
-        <div class="absolute bottom-0 left-0 right-0 text-center font-mono text-2xl font-medium" style="color: {color}">
+        <div class="absolute bottom-0 left-0 right-0 text-center font-mono {size === 'sm' ? 'text-base font-semibold' : 'text-2xl font-medium'}" style="color: {color}">
             {Math.round(score)}
         </div>
     </div>
-    <div class="mt-2 text-xs uppercase tracking-widest text-secondary font-sans font-medium">
+    <div class="{size === 'sm' ? 'mt-0.5 text-[9px]' : 'mt-2 text-xs'} uppercase tracking-widest text-secondary font-sans font-medium text-center">
         {label}
     </div>
 </div>

@@ -4,6 +4,8 @@
     import Loader2 from 'lucide-svelte/icons/loader-2';
     import Clock from 'lucide-svelte/icons/clock';
     import DollarSign from 'lucide-svelte/icons/dollar-sign';
+    import ShieldAlert from 'lucide-svelte/icons/shield-alert';
+    import ShieldCheck from 'lucide-svelte/icons/shield-check';
 
     let { result, isLoading, providerColor, providerName, modelName } = $props<{
         result: MockResult | null;
@@ -71,37 +73,66 @@
     </div>
 
     <!-- Card Footer (Metrics) -->
-    <div class="p-4 border-t border-elevated/30 bg-base/50 mt-auto">
+    <div class="p-3.5 border-t border-elevated/30 bg-base/60 mt-auto">
         {#if isLoading}
             <div class="h-20 flex items-center justify-center">
                 <span class="font-mono text-xs text-secondary opacity-50 uppercase tracking-widest animate-pulse">Generating...</span>
             </div>
         {:else if result}
-            <div class="flex items-center justify-between gap-4">
+            <div class="flex items-center justify-between gap-3">
                 <!-- Confidence Gauge -->
-                <div class="scale-75 origin-left">
+                <div class="shrink-0 flex items-center">
                     {#if result.confidence !== null}
                         <ScoreGauge 
                             score={result.confidence} 
                             label="Confidence" 
-                            dimension="performance" 
+                            dimension="performance"
+                            size="sm"
                         />
                     {:else}
-                        <div class="flex flex-col items-center opacity-50 grayscale pt-2">
-                            <div class="font-mono text-2xl font-medium text-secondary">N/A</div>
-                            <div class="mt-2 text-xs uppercase tracking-widest text-secondary font-sans font-medium">No Logprobs</div>
+                        <div class="flex flex-col items-center opacity-50 grayscale w-20">
+                            <div class="font-mono text-lg font-medium text-secondary">N/A</div>
+                            <div class="mt-0.5 text-[9px] uppercase tracking-widest text-secondary font-sans font-medium text-center">No Logprobs</div>
                         </div>
                     {/if}
                 </div>
 
-                <!-- Other Metrics -->
-                <div class="flex flex-col gap-3 flex-1 items-end pt-2">
-                    <!-- Cost -->
-                    <div class="flex flex-col items-end">
-                        <span class="text-[9px] tracking-widest text-secondary uppercase opacity-60 flex items-center gap-1">
-                            <DollarSign class="w-3 h-3" /> Cost
+                <!-- Right Metrics Column -->
+                <div class="flex flex-col gap-2 min-w-0 flex-1 items-end">
+                    <!-- Toxicity Score -->
+                    <div class="flex flex-col items-end min-w-0">
+                        <span class="text-[9px] tracking-wider text-secondary uppercase opacity-70 flex items-center gap-1 whitespace-nowrap">
+                            {#if result.toxicity !== null && result.toxicity !== undefined && result.toxicity >= 0.5}
+                                <ShieldAlert class="w-3 h-3 text-accent-danger shrink-0" />
+                            {:else}
+                                <ShieldCheck class="w-3 h-3 text-accent-resp shrink-0" />
+                            {/if}
+                            Toxicity
                         </span>
-                        <span class="font-mono text-sm text-accent-cost">{formatCost(result.cost)}</span>
+                        {#if result.toxicity !== null && result.toxicity !== undefined}
+                            {@const toxVal = result.toxicity}
+                            {@const toxPercent = toxVal * 100}
+                            {@const isToxic = toxVal >= 0.5}
+                            {@const isMedium = toxVal >= 0.1 && toxVal < 0.5}
+                            <div class="flex items-center gap-1.5 mt-0.5 whitespace-nowrap">
+                                <span class="font-mono text-xs sm:text-sm font-semibold {isToxic ? 'text-accent-danger' : isMedium ? 'text-accent-warning' : 'text-accent-resp'}">
+                                    {toxPercent < 0.01 && toxPercent > 0 ? '<0.01%' : toxPercent < 1 ? toxPercent.toFixed(2) + '%' : toxPercent.toFixed(1) + '%'}
+                                </span>
+                                <span class="text-[9px] font-mono px-1.5 py-0.5 rounded uppercase font-bold tracking-wider {isToxic ? 'bg-accent-danger/20 text-accent-danger border border-accent-danger/30' : isMedium ? 'bg-accent-warning/20 text-accent-warning border border-accent-warning/30' : 'bg-accent-resp/20 text-accent-resp border border-accent-resp/30'}">
+                                    {isToxic ? 'Toxic' : isMedium ? 'Flagged' : 'Clean'}
+                                </span>
+                            </div>
+                        {:else}
+                            <span class="font-mono text-xs text-secondary opacity-50">N/A</span>
+                        {/if}
+                    </div>
+
+                    <!-- Cost -->
+                    <div class="flex flex-col items-end min-w-0">
+                        <span class="text-[9px] tracking-wider text-secondary uppercase opacity-70 flex items-center gap-1 whitespace-nowrap">
+                            <DollarSign class="w-3 h-3 text-accent-cost shrink-0" /> Cost
+                        </span>
+                        <span class="font-mono text-xs sm:text-sm text-accent-cost font-semibold whitespace-nowrap">{formatCost(result.cost)}</span>
                     </div>
                 </div>
             </div>

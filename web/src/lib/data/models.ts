@@ -67,6 +67,7 @@ export interface MockResult {
     provider: string;
     content: string;
     confidence: number | null;
+    toxicity: number | null;
     latency_ms: number;
     cost: number;
 }
@@ -92,7 +93,9 @@ export const runPlaygroundRequest = async (prompt: string, modelSpec: string): P
         provider: data.provider,
         content: data.content,
         confidence: data.confidence,
+        toxicity: data.toxicity ?? null,
         latency_ms: data.latency_ms,
         cost: data.cost
     };
 };
+
