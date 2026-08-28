@@ -62,12 +62,21 @@ export const modelCatalog: ProviderGroup[] = [
     }
 ];
 
+export interface NLIResult {
+    label: 'contradiction' | 'entailment' | 'neutral' | string;
+    score: number;
+    contradiction_prob: number;
+    neutral_prob: number;
+    entailment_prob: number;
+}
+
 export interface MockResult {
     model: string;
     provider: string;
     content: string;
     confidence: number | null;
     toxicity: number | null;
+    nli: NLIResult | null;
     latency_ms: number;
     cost: number;
 }
@@ -94,8 +103,10 @@ export const runPlaygroundRequest = async (prompt: string, modelSpec: string): P
         content: data.content,
         confidence: data.confidence,
         toxicity: data.toxicity ?? null,
+        nli: data.nli ?? null,
         latency_ms: data.latency_ms,
         cost: data.cost
     };
 };
+
 

@@ -6,6 +6,7 @@
     import DollarSign from 'lucide-svelte/icons/dollar-sign';
     import ShieldAlert from 'lucide-svelte/icons/shield-alert';
     import ShieldCheck from 'lucide-svelte/icons/shield-check';
+    import Scale from 'lucide-svelte/icons/scale';
 
     let { result, isLoading, providerColor, providerName, modelName } = $props<{
         result: MockResult | null;
@@ -25,7 +26,7 @@
         }).format(val);
 </script>
 
-<div class="flex flex-col h-[500px] w-full rounded-2xl border border-elevated/40 bg-surface/30 backdrop-blur-sm shadow-xl overflow-hidden transition-all duration-300 hover:border-elevated">
+<div class="flex flex-col h-[520px] w-full rounded-2xl border border-elevated/40 bg-surface/30 backdrop-blur-sm shadow-xl overflow-hidden transition-all duration-300 hover:border-elevated">
     <!-- Card Header -->
     <div class="flex items-center justify-between p-4 border-b border-elevated/30 bg-surface/50">
         <div class="flex items-center gap-3">
@@ -98,7 +99,7 @@
                 </div>
 
                 <!-- Right Metrics Column -->
-                <div class="flex flex-col gap-2 min-w-0 flex-1 items-end">
+                <div class="flex flex-col gap-1.5 min-w-0 flex-1 items-end">
                     <!-- Toxicity Score -->
                     <div class="flex flex-col items-end min-w-0">
                         <span class="text-[9px] tracking-wider text-secondary uppercase opacity-70 flex items-center gap-1 whitespace-nowrap">
@@ -118,7 +119,7 @@
                                 <span class="font-mono text-xs sm:text-sm font-semibold {isToxic ? 'text-accent-danger' : isMedium ? 'text-accent-warning' : 'text-accent-resp'}">
                                     {toxPercent < 0.01 && toxPercent > 0 ? '<0.01%' : toxPercent < 1 ? toxPercent.toFixed(2) + '%' : toxPercent.toFixed(1) + '%'}
                                 </span>
-                                <span class="text-[9px] font-mono px-1.5 py-0.5 rounded uppercase font-bold tracking-wider {isToxic ? 'bg-accent-danger/20 text-accent-danger border border-accent-danger/30' : isMedium ? 'bg-accent-warning/20 text-accent-warning border border-accent-warning/30' : 'bg-accent-resp/20 text-accent-resp border border-accent-resp/30'}">
+                                <span class="text-[9px] font-mono px-1.5 py-0.2 rounded uppercase font-bold tracking-wider {isToxic ? 'bg-accent-danger/20 text-accent-danger border border-accent-danger/30' : isMedium ? 'bg-accent-warning/20 text-accent-warning border border-accent-warning/30' : 'bg-accent-resp/20 text-accent-resp border border-accent-resp/30'}">
                                     {isToxic ? 'Toxic' : isMedium ? 'Flagged' : 'Clean'}
                                 </span>
                             </div>
@@ -126,6 +127,27 @@
                             <span class="font-mono text-xs text-secondary opacity-50">N/A</span>
                         {/if}
                     </div>
+
+                    <!-- NLI / Hallucination Verification -->
+                    {#if result.nli}
+                        {@const nli = result.nli}
+                        {@const isContradiction = nli.label === 'contradiction'}
+                        {@const isEntailment = nli.label === 'entailment'}
+                        <div class="flex flex-col items-end min-w-0">
+                            <span class="text-[9px] tracking-wider text-secondary uppercase opacity-70 flex items-center gap-1 whitespace-nowrap">
+                                <Scale class="w-3 h-3 {isContradiction ? 'text-accent-danger' : isEntailment ? 'text-accent-cost' : 'text-accent-warning'} shrink-0" />
+                                NLI Check
+                            </span>
+                            <div class="flex items-center gap-1.5 mt-0.5 whitespace-nowrap">
+                                <span class="font-mono text-xs sm:text-sm font-semibold {isContradiction ? 'text-accent-danger' : isEntailment ? 'text-accent-cost' : 'text-accent-warning'}">
+                                    {(nli.score * 100).toFixed(0)}%
+                                </span>
+                                <span class="text-[9px] font-mono px-1.5 py-0.2 rounded uppercase font-bold tracking-wider {isContradiction ? 'bg-accent-danger/20 text-accent-danger border border-accent-danger/30' : isEntailment ? 'bg-accent-cost/20 text-accent-cost border border-accent-cost/30' : 'bg-accent-warning/20 text-accent-warning border border-accent-warning/30'}">
+                                    {nli.label}
+                                </span>
+                            </div>
+                        </div>
+                    {/if}
 
                     <!-- Cost -->
                     <div class="flex flex-col items-end min-w-0">

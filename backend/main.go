@@ -116,6 +116,22 @@ func setupRouter() *gin.Engine {
 			return
 		}
 
+		var premise string
+		for i := len(chatMessages) - 1; i >= 0; i-- {
+			if chatMessages[i].Role == "user" {
+				premise = chatMessages[i].Content
+				break
+			}
+		}
+		if premise == "" && len(chatMessages) > 0 {
+			premise = chatMessages[len(chatMessages)-1].Content
+		}
+
+		nliReport, err := runNLIScanner(premise, responseContent.Content)
+		if err != nil {
+			log.Printf("NLI scanner warning: %v", err)
+		}
+
 		// We use background context here so tracking completes even if the client disconnects early
 		go func() {
 			if err := RecordSpend(context.Background(), userID, responseContent.Cost); err != nil {
@@ -141,6 +157,7 @@ func setupRouter() *gin.Engine {
 			"model":      req.Model,
 			"confidence": conf,
 			"toxicity":   toxicity,
+			"nli":        nliReport,
 			"choices":    []gin.H{choice},
 		})
 	})
@@ -262,6 +279,11 @@ func setupRouter() *gin.Engine {
 			return
 		}
 
+		nliReport, err := runNLIScanner(req.Prompt, responseContent.Content)
+		if err != nil {
+			log.Printf("NLI scanner warning: %v", err)
+		}
+
 		go func() {
 			if err := RecordSpend(context.Background(), userID, responseContent.Cost); err != nil {
 				log.Printf("Error recording spend for %s: %v", userID, err)
@@ -274,6 +296,7 @@ func setupRouter() *gin.Engine {
 			"content":    responseContent.Content,
 			"confidence": conf,
 			"toxicity":   toxicity,
+			"nli":        nliReport,
 			"latency_ms": latencyMs,
 			"cost":       responseContent.Cost / 1_000_000,
 		})

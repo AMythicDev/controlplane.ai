@@ -2,21 +2,25 @@ import os
 import numpy as np
 import onnxruntime as ort
 from transformers import AutoTokenizer
+from pathlib import Path
 
-# Resolve absolute path to the local ONNX model (toxicity-scanner/model/model.onnx)
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
-MODEL_PATH = os.path.join(BASE_DIR, "model", "model.onnx")
+def _resolve_model_path() -> str:
+    MODEL_NAME = "nli-deberta-v3-small.onnx"
+    repo_model = Path(__file__).resolve().parents[2] / "model" / MODEL_NAME
+    if repo_model.exists():
+        return str(repo_model)
+    return f"model/{MODEL_NAME}"
 
-print(f"Loading ONNX model from: {MODEL_PATH}")
+model = _resolve_model_path()
 
 tokenizer = AutoTokenizer.from_pretrained("Xenova/nli-deberta-v3-small")
-session = ort.InferenceSession(MODEL_PATH, providers=["CPUExecutionProvider"])
+session = ort.InferenceSession(model, providers=["CPUExecutionProvider"])
 
 def softmax(x: np.ndarray) -> np.ndarray:
     e = np.exp(x - np.max(x))
     return e / e.sum(axis=-1, keepdims=True)
 
-def run_nli(premise: str, hypothesis: str) -> dict:
+def run_nli(premise: str, hypothesis: str) -> dict[str, str | float]:
     inputs = tokenizer(
         premise, 
         hypothesis, 
@@ -44,28 +48,4 @@ def run_nli(premise: str, hypothesis: str) -> dict:
         "entailment_prob": float(probs[1]),
         "neutral_prob": float(probs[2])
     }
-
-if __name__ == "__main__":
-    import json
-    print("\n" + "="*50)
-    print("🧠 Interactive RAG Verifier Test")
-    print("Type 'quit' in either prompt to exit.")
-    print("="*50 + "\n")
-
-    while True:
-        context = input("\n📝 Enter Source Context (Premise)   : ")
-        if context.lower() in ['quit', 'q', 'exit']:
-            break
-            
-        answer = input("🤖 Enter LLM Answer (Hypothesis)  : ")
-        if answer.lower() in ['quit', 'q', 'exit']:
-            break
-            
-        print("\n⏳ Calculating probabilities...")
-        res = run_nli(context, answer)
-        
-        print("\n📊 RESULT:")
-        print(json.dumps(res, indent=2))
-        print("-" * 50)
-
 

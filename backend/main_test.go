@@ -231,4 +231,29 @@ func TestRunToxicityScanner(t *testing.T) {
 	})
 }
 
+func TestRunNLIScanner(t *testing.T) {
+	t.Run("Empty input returns nil and no error", func(t *testing.T) {
+		report, err := runNLIScanner("", "hypothesis")
+		assert.NoError(t, err)
+		assert.Nil(t, report)
+
+		report2, err := runNLIScanner("premise", "")
+		assert.NoError(t, err)
+		assert.Nil(t, report2)
+	})
+
+	t.Run("Live or mock server NLI check", func(t *testing.T) {
+		report, err := runNLIScanner("The sky is blue", "The sky is green")
+		if err != nil {
+			t.Logf("NLI scanner container not reachable: %v", err)
+			return
+		}
+		assert.NotNil(t, report)
+		assert.Equal(t, "contradiction", report.Label)
+		assert.True(t, report.Score > 0.5)
+		assert.True(t, report.ContradictionProb > 0.5)
+	})
+}
+
+
 
