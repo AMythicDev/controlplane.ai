@@ -16,7 +16,7 @@ def _resolve_model_path() -> str:
 onnx_model_path = _resolve_model_path()
 session = ort.InferenceSession(onnx_model_path, providers=["CPUExecutionProvider"])
 
-def run_inference(texts: list[str]) -> list[dict[str, float]]:
+def toxicity_scan(texts: list[str]) -> list[dict[str, float]]:
     if not texts:
         return []
 

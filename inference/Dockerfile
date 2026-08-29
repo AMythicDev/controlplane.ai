@@ -10,4 +10,4 @@ COPY model/ ./model/
 COPY src ./src/
 COPY README.md ./
 RUN uv sync --frozen --no-cache
-CMD ["uv", "run", "src/toxicity_scanner/main.py"]
+CMD ["uv", "run", "src/inference/main.py"]

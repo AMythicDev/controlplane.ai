@@ -1,5 +1,5 @@
 [project]
-name = "toxicity-scanner"
+name = "inference"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
@@ -11,12 +11,14 @@ dependencies = [
     "fastapi>=0.141.1",
     "numpy>=2.5.2",
     "onnxruntime>=1.29.0",
+    "qdrant-client>=1.13.0",
+    "sentence-transformers>=6.0.0",
     "transformers>=5.16.1",
     "uvicorn>=0.52.4",
 ]
 
 [project.scripts]
-toxicity-scanner = "toxicity_scanner.main:main"
+inference = "inference.main:main"
 
 [build-system]
 requires = ["uv_build>=0.12.5,<0.13.0"]

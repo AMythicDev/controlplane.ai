@@ -7,6 +7,7 @@
     import ShieldAlert from 'lucide-svelte/icons/shield-alert';
     import ShieldCheck from 'lucide-svelte/icons/shield-check';
     import Scale from 'lucide-svelte/icons/scale';
+    import Zap from 'lucide-svelte/icons/zap';
 
     let { result, isLoading, providerColor, providerName, modelName } = $props<{
         result: MockResult | null;
@@ -26,7 +27,7 @@
         }).format(val);
 </script>
 
-<div class="flex flex-col h-[520px] w-full rounded-2xl border border-elevated/40 bg-surface/30 backdrop-blur-sm shadow-xl overflow-hidden transition-all duration-300 hover:border-elevated">
+<div class="flex flex-col h-[520px] w-full rounded-2xl border border-elevated/40 bg-surface/30 backdrop-blur-sm shadow-xl overflow-hidden transition-all duration-300 hover:border-elevated {result?.cached ? 'ring-1 ring-accent-perf/30' : ''}">
     <!-- Card Header -->
     <div class="flex items-center justify-between p-4 border-b border-elevated/30 bg-surface/50">
         <div class="flex items-center gap-3">
@@ -45,9 +46,17 @@
         {#if isLoading}
             <Loader2 class="w-4 h-4 text-accent-perf animate-spin" />
         {:else if result}
-            <div class="flex items-center gap-1.5 px-2 py-1 rounded bg-surface border border-elevated text-xs font-mono">
-                <Clock class="w-3 h-3 text-secondary" />
-                <span class="text-primary">{result.latency_ms}ms</span>
+            <div class="flex items-center gap-2">
+                {#if result.cached}
+                    <div class="flex items-center gap-1 px-2 py-0.5 rounded-full bg-accent-perf/20 border border-accent-perf/40 text-[10px] font-mono text-accent-perf font-bold tracking-wider uppercase shadow-[0_0_12px_rgba(161,0,255,0.25)]">
+                        <Zap class="w-3 h-3 text-accent-perf fill-accent-perf" />
+                        <span>Cache</span>
+                    </div>
+                {/if}
+                <div class="flex items-center gap-1.5 px-2 py-1 rounded bg-surface border border-elevated text-xs font-mono">
+                    <Clock class="w-3 h-3 text-secondary" />
+                    <span class="text-primary">{result.latency_ms}ms</span>
+                </div>
             </div>
         {/if}
     </div>
@@ -85,7 +94,7 @@
                 <div class="shrink-0 flex items-center">
                     {#if result.confidence !== null}
                         <ScoreGauge 
-                            score={result.confidence} 
+                            score={result.confidence > 1 ? result.confidence : result.confidence * 100} 
                             label="Confidence" 
                             dimension="performance"
                             size="sm"

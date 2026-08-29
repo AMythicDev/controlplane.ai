@@ -4,9 +4,11 @@ import (
 	"context"
 	"log"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/joho/godotenv"
 )
 
 var LoadedConfig struct {
@@ -29,8 +31,7 @@ func setupRouter() *gin.Engine {
 		})
 	})
 
-	// Proxy OpenAI chat completion API
-	r.POST("/v1/chat/completions", func(c *gin.Context) {
+	chatCompletionHandler := func(c *gin.Context) {
 		// Hardcoded user ID for MVP
 		userID := "user_mvp_123"
 
@@ -52,11 +53,12 @@ func setupRouter() *gin.Engine {
 		}
 
 		var req struct {
-			Model    string `json:"model" binding:"required"`
-			Messages []struct {
+			Model            string `json:"model" binding:"required"`
+			Messages         []struct {
 				Role    string `json:"role" binding:"required"`
 				Content string `json:"content" binding:"required"`
 			} `json:"messages" binding:"required"`
+			UseSemanticCache *bool `json:"use_semantic_cache"`
 		}
 
 		if err := c.ShouldBindJSON(&req); err != nil {
@@ -90,6 +92,67 @@ func setupRouter() *gin.Engine {
 			})
 		}
 
+		var premise string
+		for i := len(chatMessages) - 1; i >= 0; i-- {
+			if chatMessages[i].Role == "user" {
+				premise = chatMessages[i].Content
+				break
+			}
+		}
+		if premise == "" && len(chatMessages) > 0 {
+			premise = chatMessages[len(chatMessages)-1].Content
+		}
+
+		useSemanticCache := true
+		if req.UseSemanticCache != nil {
+			useSemanticCache = *req.UseSemanticCache
+		}
+
+		if useSemanticCache && premise != "" {
+			cached, err := querySemanticCache(premise, 0.95)
+			if err == nil && cached != nil && cached.Found && cached.Response != nil && (cached.Score == nil || *cached.Score >= 0.95) {
+				cachedContent := *cached.Response
+				conf := float32(1.0)
+				toxicity := float32(0.0)
+
+				go LogRequest(RequestRecord{
+					Endpoint:       "/v1/chat/completions",
+					Model:          req.Model,
+					Provider:       provider,
+					Prompt:         premise,
+					Messages:       chatMessages,
+					Response:       cachedContent,
+					Confidence:     &conf,
+					Toxicity:       toxicity,
+					NLI:            nil,
+					CostMicrocents: 0,
+					Cached:         true,
+				})
+
+				choice := gin.H{
+					"index": 0,
+					"message": gin.H{
+						"role":    "assistant",
+						"content": cachedContent,
+					},
+					"finish_reason": "stop",
+				}
+
+				c.JSON(http.StatusOK, gin.H{
+					"id":         "chatcmpl-" + provider + "-cached",
+					"object":     "chat.completion",
+					"created":    time.Now().Unix(),
+					"model":      req.Model,
+					"confidence": conf,
+					"toxicity":   toxicity,
+					"nli":        nil,
+					"choices":    []gin.H{choice},
+					"cached":     true,
+				})
+				return
+			}
+		}
+
 		// Call provider
 		responseContent, err := callProvider(c.Request.Context(), provider, model, chatMessages)
 
@@ -116,17 +179,6 @@ func setupRouter() *gin.Engine {
 			return
 		}
 
-		var premise string
-		for i := len(chatMessages) - 1; i >= 0; i-- {
-			if chatMessages[i].Role == "user" {
-				premise = chatMessages[i].Content
-				break
-			}
-		}
-		if premise == "" && len(chatMessages) > 0 {
-			premise = chatMessages[len(chatMessages)-1].Content
-		}
-
 		nliReport, err := runNLIScanner(premise, responseContent.Content)
 		if err != nil {
 			log.Printf("NLI scanner warning: %v", err)
@@ -138,6 +190,28 @@ func setupRouter() *gin.Engine {
 				log.Printf("Error recording spend for %s: %v", userID, err)
 			}
 		}()
+
+		go LogRequest(RequestRecord{
+			Endpoint:       "/v1/chat/completions",
+			Model:          req.Model,
+			Provider:       provider,
+			Prompt:         premise,
+			Messages:       chatMessages,
+			Response:       responseContent.Content,
+			Confidence:     &conf,
+			Toxicity:       toxicity,
+			NLI:            nliReport,
+			CostMicrocents: responseContent.Cost,
+			Cached:         false,
+		})
+
+		if useSemanticCache && premise != "" {
+			go func() {
+				if err := saveSemanticCache(premise, responseContent.Content); err != nil {
+					log.Printf("Error saving to semantic cache: %v", err)
+				}
+			}()
+		}
 
 		// Build the choice map
 		choice := gin.H{
@@ -160,7 +234,10 @@ func setupRouter() *gin.Engine {
 			"nli":        nliReport,
 			"choices":    []gin.H{choice},
 		})
-	})
+	}
+
+	// Proxy OpenAI chat completion API
+	r.POST("/v1/chat/completions", chatCompletionHandler)
 
 	r.GET("/v1/cost", func(c *gin.Context) {
 		userID := "user_mvp_123"
@@ -179,9 +256,11 @@ func setupRouter() *gin.Engine {
 	})
 
 	r.GET("/v1/config", func(c *gin.Context) {
+		dailyLim, monthlyLim := getPerUserLimits()
+
 		c.JSON(http.StatusOK, gin.H{
-			"per_user_daily_limit":   BudgetGuardRails.PerUserDailyLimit,
-			"per_user_monthly_limit": BudgetGuardRails.PerUserMonthlyLimit,
+			"per_user_daily_limit":   dailyLim,
+			"per_user_monthly_limit": monthlyLim,
 		})
 	})
 
@@ -199,22 +278,20 @@ func setupRouter() *gin.Engine {
 		ctx := c.Request.Context()
 
 		if req.PerUserDailyLimit != nil {
-			BudgetGuardRails.PerUserDailyLimit = *req.PerUserDailyLimit
 			rdb.Set(ctx, "config:per_user_daily_limit", *req.PerUserDailyLimit, 0)
 		}
 
 		if req.PerUserMonthlyLimit != nil {
-			BudgetGuardRails.PerUserMonthlyLimit = *req.PerUserMonthlyLimit
 			rdb.Set(ctx, "config:per_user_monthly_limit", *req.PerUserMonthlyLimit, 0)
 		}
 
 		c.JSON(http.StatusOK, gin.H{
-			"per_user_daily_limit":   BudgetGuardRails.PerUserDailyLimit,
-			"per_user_monthly_limit": BudgetGuardRails.PerUserMonthlyLimit,
+			"per_user_daily_limit":   *req.PerUserDailyLimit,
+			"per_user_monthly_limit": *&req.PerUserMonthlyLimit,
 		})
 	})
 
-	r.POST("/v1/playground", func(c *gin.Context) {
+	playgroundHandler := func(c *gin.Context) {
 		// Hardcoded user ID for MVP
 		userID := "user_mvp_123"
 
@@ -231,8 +308,9 @@ func setupRouter() *gin.Engine {
 		}
 
 		var req struct {
-			Prompt    string `json:"prompt" binding:"required"`
-			ModelSpec string `json:"model_spec" binding:"required"`
+			Prompt           string `json:"prompt" binding:"required"`
+			ModelSpec        string `json:"model_spec" binding:"required"`
+			UseSemanticCache *bool  `json:"use_semantic_cache"`
 		}
 
 		if err := c.ShouldBindJSON(&req); err != nil {
@@ -246,12 +324,55 @@ func setupRouter() *gin.Engine {
 			return
 		}
 
+		start := time.Now()
+
+		useSemanticCache := true
+		if req.UseSemanticCache != nil {
+			useSemanticCache = *req.UseSemanticCache
+		}
+
+		if useSemanticCache && req.Prompt != "" {
+			cached, err := querySemanticCache(req.Prompt, 0.95)
+			if err == nil && cached != nil && cached.Found && cached.Response != nil && (cached.Score == nil || *cached.Score >= 0.95) {
+				cachedContent := *cached.Response
+				conf := float32(1.0)
+				toxicity := float32(0.0)
+				latencyMs := time.Since(start).Milliseconds()
+
+				go LogRequest(RequestRecord{
+					Endpoint:       "/v1/playground",
+					Model:          req.ModelSpec,
+					Provider:       provider,
+					Prompt:         req.Prompt,
+					Response:       cachedContent,
+					Confidence:     &conf,
+					Toxicity:       toxicity,
+					NLI:            nil,
+					LatencyMs:      latencyMs,
+					CostMicrocents: 0,
+					Cached:         true,
+				})
+
+				c.JSON(http.StatusOK, gin.H{
+					"model":      model,
+					"provider":   provider,
+					"content":    cachedContent,
+					"confidence": &conf,
+					"toxicity":   toxicity,
+					"nli":        nil,
+					"latency_ms": latencyMs,
+					"cost":       0.0,
+					"cached":     true,
+				})
+				return
+			}
+		}
+
 		messages := []ChatMessage{
 			{Role: "user", Content: req.Prompt},
 		}
 
 		// Track latency
-		start := time.Now()
 		responseContent, err := callProvider(c.Request.Context(), provider, model, messages)
 		latencyMs := time.Since(start).Milliseconds()
 
@@ -263,9 +384,7 @@ func setupRouter() *gin.Engine {
 		var conf *float32
 		if len(responseContent.Logprobs) > 0 {
 			c := confidenceScore(responseContent.Logprobs)
-			// convert 0-1 confidence back to 0-100 percentage for UI
-			cPercent := c * 100
-			conf = &cPercent
+			conf = &c
 		}
 		toxicity, err := runToxicityScanner([]string{responseContent.Content})
 
@@ -290,6 +409,28 @@ func setupRouter() *gin.Engine {
 			}
 		}()
 
+		go LogRequest(RequestRecord{
+			Endpoint:       "/v1/playground",
+			Model:          req.ModelSpec,
+			Provider:       provider,
+			Prompt:         req.Prompt,
+			Response:       responseContent.Content,
+			Confidence:     conf,
+			Toxicity:       toxicity,
+			NLI:            nliReport,
+			LatencyMs:      latencyMs,
+			CostMicrocents: responseContent.Cost,
+			Cached:         false,
+		})
+
+		if useSemanticCache && req.Prompt != "" {
+			go func() {
+				if err := saveSemanticCache(req.Prompt, responseContent.Content); err != nil {
+					log.Printf("Error saving to semantic cache: %v", err)
+				}
+			}()
+		}
+
 		c.JSON(http.StatusOK, gin.H{
 			"model":      model,
 			"provider":   provider,
@@ -300,13 +441,64 @@ func setupRouter() *gin.Engine {
 			"latency_ms": latencyMs,
 			"cost":       responseContent.Cost / 1_000_000,
 		})
+	}
+
+	r.POST("/v1/playground", playgroundHandler)
+
+	r.GET("/v1/requests", func(c *gin.Context) {
+		limitStr := c.DefaultQuery("limit", "50")
+		offsetStr := c.DefaultQuery("offset", "0")
+
+		limit, err := strconv.ParseInt(limitStr, 10, 64)
+		if err != nil || limit <= 0 {
+			limit = 50
+		}
+		if limit > 200 {
+			limit = 200
+		}
+
+		offset, err := strconv.ParseInt(offsetStr, 10, 64)
+		if err != nil || offset < 0 {
+			offset = 0
+		}
+
+		records, total, err := FetchRequests(limit, offset)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"requests": records,
+			"total":    total,
+			"limit":    limit,
+			"offset":   offset,
+		})
+	})
+
+	r.GET("/v1/requests/:id", func(c *gin.Context) {
+		id := c.Param("id")
+
+		record, err := FetchRequestByID(id)
+		if err != nil {
+			c.JSON(http.StatusNotFound, gin.H{"error": "request not found"})
+			return
+		}
+
+		c.JSON(http.StatusOK, record)
 	})
 
 	return r
 }
 
 func main() {
+	err := godotenv.Load()
+	if err != nil {
+		log.Fatal("Error loading .env file")
+	}
+
 	InitRedis()
+	InitMongoDB()
 
 	r := setupRouter()
 

@@ -72,3 +72,28 @@ export interface CostBreakdown {
     amount: number;
     percentage: number;
 }
+
+export interface NLIResult {
+    label: string;
+    score: number;
+    contradiction_prob: number;
+    neutral_prob: number;
+    entailment_prob: number;
+}
+
+export interface RequestRecord {
+    id: string;
+    endpoint: string;
+    model: string;
+    provider: string;
+    prompt: string;
+    messages?: { Role: string; Content: string }[];
+    response: string;
+    confidence: number | null;
+    toxicity: number;
+    nli: NLIResult | null;
+    latency_ms: number;
+    cost_microcents: number;
+    cached?: boolean;
+    timestamp: string;
+}

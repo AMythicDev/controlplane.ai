@@ -79,15 +79,17 @@ export interface MockResult {
     nli: NLIResult | null;
     latency_ms: number;
     cost: number;
+    cached?: boolean;
 }
 
-export const runPlaygroundRequest = async (prompt: string, modelSpec: string): Promise<MockResult> => {
+export const runPlaygroundRequest = async (prompt: string, modelSpec: string, useSemanticCache: boolean = true): Promise<MockResult> => {
     const res = await fetch('/v1/playground', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
             prompt: prompt,
-            model_spec: modelSpec
+            model_spec: modelSpec,
+            use_semantic_cache: useSemanticCache
         })
     });
 
@@ -105,7 +107,8 @@ export const runPlaygroundRequest = async (prompt: string, modelSpec: string): P
         toxicity: data.toxicity ?? null,
         nli: data.nli ?? null,
         latency_ms: data.latency_ms,
-        cost: data.cost
+        cost: data.cost,
+        cached: data.cached ?? false
     };
 };
 

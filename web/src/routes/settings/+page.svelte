@@ -1,7 +1,7 @@
 <script lang="ts">
 	// State for inputs
-	let budgetGlobalDaily = $state(500);
-	let budgetGlobalMonthly = $state(10000);
+	let budgetGlobalDaily = $state(0);
+	let budgetGlobalMonthly = $state(0);
 	let budgetUserDaily = $state(50);
 	let budgetUserMonthly = $state(1000);
 	let isSaving = $state(false);
@@ -29,7 +29,9 @@
 			saveMessage = 'Failed to save limits';
 		} finally {
 			isSaving = false;
-			setTimeout(() => { saveMessage = ''; }, 3000);
+			setTimeout(() => {
+				saveMessage = '';
+			}, 3000);
 		}
 	}
 
@@ -286,7 +288,11 @@
 
 			<div class="mt-6 flex items-center justify-end gap-4">
 				{#if saveMessage}
-					<span class="font-mono text-xs {saveMessage.includes('success') ? 'text-accent-perf' : 'text-accent-danger'}">{saveMessage}</span>
+					<span
+						class="font-mono text-xs {saveMessage.includes('success')
+							? 'text-accent-perf'
+							: 'text-accent-danger'}">{saveMessage}</span
+					>
 				{/if}
 				<button
 					onclick={saveLimits}

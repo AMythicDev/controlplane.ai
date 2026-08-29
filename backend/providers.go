@@ -147,7 +147,8 @@ func callProvider(ctx context.Context, provider string, model string, messages [
 		var clientOpts []anthropicoption.RequestOption
 		clientOpts = append(clientOpts, anthropicoption.WithAPIKey(os.Getenv("ANTHROPIC_API_KEY")))
 		if LoadedConfig.Enviroment == "testing" {
-			clientOpts = append(clientOpts, anthropicoption.WithBaseURL(LoadedConfig.MockServerBaseUrl))
+			anthropic_mockserver_url := LoadedConfig.MockServerBaseUrl[:len(LoadedConfig.MockServerBaseUrl)-2]
+			clientOpts = append(clientOpts, anthropicoption.WithBaseURL(anthropic_mockserver_url))
 		}
 		client := anthropic.NewClient(clientOpts...)
 

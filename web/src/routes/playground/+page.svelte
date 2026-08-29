@@ -5,10 +5,12 @@
     import ChevronDown from 'lucide-svelte/icons/chevron-down';
     import Check from 'lucide-svelte/icons/check';
     import FlaskConical from 'lucide-svelte/icons/flask-conical';
+    import Zap from 'lucide-svelte/icons/zap';
 
     // State
     let prompt = $state('');
     let selectedModels = $state<Set<string>>(new Set(['openai/gpt-4o', 'anthropic/claude-sonnet-4-20250514']));
+    let useSemanticCache = $state(true);
     let isRunning = $state(false);
     let globalError = $state<string | null>(null);
     
@@ -76,7 +78,7 @@
         // Run all selected models in parallel
         const promises = specs.map(async (spec) => {
             try {
-                const res = await runPlaygroundRequest(prompt, spec);
+                const res = await runPlaygroundRequest(prompt, spec, useSemanticCache);
                 console.log(res)
                 results[spec] = res;
             } catch (err: any) {
@@ -145,12 +147,30 @@
                     class="w-full h-40 bg-transparent resize-none p-4 font-sans text-primary placeholder:text-secondary/50 focus:outline-none custom-scrollbar"
                 ></textarea>
                 
-                <div class="flex items-center justify-between p-3 border-t border-elevated/50 bg-base/30">
-                    <span class="font-mono text-[10px] text-secondary opacity-60">System prompts not yet supported</span>
+                <div class="flex items-center justify-between p-3 border-t border-elevated/50 bg-base/30 gap-2">
+                    <!-- Semantic Cache Toggle -->
+                    <div class="flex items-center gap-2">
+                        <button
+                            type="button"
+                            role="switch"
+                            aria-checked={useSemanticCache}
+                            onclick={() => (useSemanticCache = !useSemanticCache)}
+                            class="focus-ring relative h-5 w-9 shrink-0 rounded-full transition-colors duration-200 ease-in-out {useSemanticCache ? 'bg-accent-perf' : 'bg-elevated'}"
+                        >
+                            <span
+                                class="absolute top-[2px] left-[2px] h-4 w-4 rounded-full bg-white transition-transform duration-200 {useSemanticCache ? 'translate-x-4' : 'translate-x-0'} shadow-sm"
+                            ></span>
+                        </button>
+                        <span class="flex items-center gap-1 font-mono text-[11px] {useSemanticCache ? 'text-primary' : 'text-secondary/70'} select-none transition-colors">
+                            <Zap class="w-3 h-3 {useSemanticCache ? 'text-accent-perf fill-accent-perf' : 'text-secondary/50'}" />
+                            Semantic Cache
+                        </span>
+                    </div>
+
                     <button
                         onclick={runPlayground}
                         disabled={isRunning || selectedCount === 0 || !prompt.trim()}
-                        class="flex items-center gap-2 px-5 py-2 rounded-full bg-accent-perf text-white font-mono text-xs font-bold uppercase tracking-wider shadow-[0_0_15px_rgba(161,0,255,0.4)] transition-all hover:scale-105 hover:shadow-[0_0_20px_rgba(161,0,255,0.6)] disabled:opacity-50 disabled:pointer-events-none disabled:hover:scale-100 disabled:shadow-none"
+                        class="flex items-center gap-2 px-5 py-2 rounded-full bg-accent-perf text-white font-mono text-xs font-bold uppercase tracking-wider shadow-[0_0_15px_rgba(161,0,255,0.4)] transition-all hover:scale-105 hover:shadow-[0_0_20px_rgba(161,0,255,0.6)] disabled:opacity-50 disabled:pointer-events-none disabled:hover:scale-100 disabled:shadow-none shrink-0"
                     >
                         {#if isRunning}
                             <div class="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>

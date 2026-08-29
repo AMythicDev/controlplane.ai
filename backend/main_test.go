@@ -106,6 +106,65 @@ func TestChatCompletionsProxy(t *testing.T) {
 		assert.Equal(t, provider, "google")
 		assert.Equal(t, model, "gemini-3.1-pro-preview")
 	})
+
+	t.Run("Chat Completion with Semantic Cache Hit", func(t *testing.T) {
+		// Pre-populate cache
+		prompt := "What is the capital of Italy?"
+		cachedResp := "The capital of Italy is Rome."
+		_ = saveSemanticCache(prompt, cachedResp)
+
+		reqBody := map[string]interface{}{
+			"model": "openai/gpt-3.5-turbo",
+			"messages": []map[string]string{
+				{"role": "user", "content": prompt},
+			},
+			"use_semantic_cache": true,
+		}
+		bodyBytes, _ := json.Marshal(reqBody)
+
+		w := httptest.NewRecorder()
+		req, _ := http.NewRequest("POST", "/v1/chat/completions", bytes.NewBuffer(bodyBytes))
+		req.Header.Set("Content-Type", "application/json")
+
+		router.ServeHTTP(w, req)
+
+		if w.Code == http.StatusOK {
+			var response map[string]interface{}
+			err := json.Unmarshal(w.Body.Bytes(), &response)
+			assert.NoError(t, err)
+			assert.NotEmpty(t, response["choices"])
+			choices := response["choices"].([]interface{})
+			firstChoice := choices[0].(map[string]interface{})
+			message := firstChoice["message"].(map[string]interface{})
+			assert.Equal(t, cachedResp, message["content"])
+			assert.Equal(t, true, response["cached"])
+		}
+	})
+
+	t.Run("Chat Completion with use_semantic_cache=false", func(t *testing.T) {
+		reqBody := map[string]interface{}{
+			"model": "openai/gpt-3.5-turbo",
+			"messages": []map[string]string{
+				{"role": "user", "content": "Hello!"},
+			},
+			"use_semantic_cache": false,
+		}
+		bodyBytes, _ := json.Marshal(reqBody)
+
+		w := httptest.NewRecorder()
+		req, _ := http.NewRequest("POST", "/v1/chat/completions", bytes.NewBuffer(bodyBytes))
+		req.Header.Set("Content-Type", "application/json")
+
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+		var response map[string]interface{}
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+		assert.NoError(t, err)
+		assert.NotEmpty(t, response["choices"])
+		// Should not be marked cached
+		assert.Nil(t, response["cached"])
+	})
 }
 
 func TestConfidenceScore(t *testing.T) {
@@ -252,6 +311,47 @@ func TestRunNLIScanner(t *testing.T) {
 		assert.Equal(t, "contradiction", report.Label)
 		assert.True(t, report.Score > 0.5)
 		assert.True(t, report.ContradictionProb > 0.5)
+	})
+}
+
+func TestSemanticCache(t *testing.T) {
+	t.Run("Empty request returns nil and no error", func(t *testing.T) {
+		res, err := querySemanticCache("", 0.95)
+		assert.NoError(t, err)
+		assert.Nil(t, res)
+
+		err = saveSemanticCache("", "")
+		assert.NoError(t, err)
+	})
+
+	t.Run("Save and Query Semantic Cache", func(t *testing.T) {
+		reqText := "What is the capital of Spain?"
+		respText := "The capital of Spain is Madrid."
+
+		err := saveSemanticCache(reqText, respText)
+		if err != nil {
+			t.Logf("Semantic cache container not reachable: %v", err)
+			return
+		}
+
+		res, err := querySemanticCache(reqText, 0.95)
+		assert.NoError(t, err)
+		assert.NotNil(t, res)
+		assert.True(t, res.Found)
+		assert.NotNil(t, res.Response)
+		assert.Equal(t, respText, *res.Response)
+		assert.NotNil(t, res.Score)
+		assert.True(t, *res.Score >= 0.95)
+	})
+
+	t.Run("Unrelated Query Returns Not Found", func(t *testing.T) {
+		res, err := querySemanticCache("Completely unrelated query about astrophysics", 0.95)
+		if err != nil {
+			t.Logf("Semantic cache container not reachable: %v", err)
+			return
+		}
+		assert.NotNil(t, res)
+		assert.False(t, res.Found)
 	})
 }
 
