@@ -50,46 +50,54 @@
 ## 🏛️ Architecture
 
 ```mermaid
-flowchart TD
-    Client["Client / SDK / Web UI"]
-    
-    subgraph ControlPlaneGateway ["ControlPlane.ai Gateway (Go :8080)"]
-        BudgetCheck["1. Budget & Rate Limiter (Redis)"]
-        PIICheck["2. PII Analyzer & Anonymizer (Presidio)"]
-        CacheCheck["3. Semantic Cache Query (Qdrant / Inference)"]
-        Router["4. Provider Router & Client Proxy"]
-        Guardrails["5. Toxicity & NLI Evaluation"]
-        Logger["6. Audit Logger (MongoDB) & Spend Tracker"]
+flowchart LR
+    subgraph Clients ["Clients & Applications"]
+        direction TB
+        SDK["Client SDK / curl"]
+        UI["SvelteKit Dashboard"]
     end
-    
-    subgraph ExternalServices ["Data & Inference Services"]
-        RedisDB[("Redis :6379")]
-        Mongo[("MongoDB :27017")]
-        QdrantDB[("Qdrant Vector DB :6333")]
-        InferenceSvc["Inference API (FastAPI / ONNX :5002)"]
-        PresidioSvc["Presidio Analyzer & Anonymizer (:5000 / :5001)"]
-    end
-    
-    LLM["External LLM Providers (OpenAI / Anthropic / Local)"]
 
-    Client -->|"POST /v1/chat/completions"| BudgetCheck
-    BudgetCheck <--> RedisDB
-    BudgetCheck --> PIICheck
-    PIICheck <--> PresidioSvc
-    PIICheck --> CacheCheck
-    CacheCheck <--> InferenceSvc
-    InferenceSvc <--> QdrantDB
-    
-    CacheCheck -->|"Cache Miss"| Router
-    Router --> LLM
-    LLM --> Guardrails
-    Guardrails <--> InferenceSvc
-    Guardrails --> Logger
-    Logger --> Mongo
-    Logger --> RedisDB
-    Logger --> Client
-    
-    CacheCheck -->|"Cache Hit (0ms / $0)"| Logger
+    subgraph Gateway ["ControlPlane.ai Gateway (Go :8080)"]
+        direction TB
+        G1["1. Budget & Rate Limiter"]
+        G2["2. PII Masking & Anonymizer"]
+        G3{"3. Semantic Cache"}
+        G4["4. Multi-Provider Router"]
+        G5["5. Toxicity & NLI Guardrails"]
+        G6["6. Telemetry & Spend Logger"]
+
+        G1 --> G2 --> G3
+        G3 -->|"Cache Miss"| G4 --> G5 --> G6
+        G3 -->|"Cache Hit (0ms / $0)"| G6
+    end
+
+    subgraph Services ["Guardrail & Data Services"]
+        direction TB
+        Presidio["Microsoft Presidio (:5000)"]
+        Inference["Inference Engine (ONNX :5002)"]
+        Qdrant[("Qdrant Vector DB (:6333)")]
+        Redis[("Redis (:6379)")]
+        Mongo[("MongoDB (:27017)")]
+    end
+
+    subgraph Providers ["Upstream LLM Providers"]
+        direction TB
+        NVIDIA["NVIDIA NIM (Free)"]
+        OpenAI["OpenAI"]
+        Anthropic["Anthropic"]
+    end
+
+    Clients -->|"POST /v1/chat/completions"| G1
+    G6 -->|"Response"| Clients
+
+    G1 -.-> Redis
+    G2 -.-> Presidio
+    G3 -.-> Inference
+    Inference -.-> Qdrant
+    G4 --> Providers
+    G5 -.-> Inference
+    G6 -.-> Mongo
+    G6 -.-> Redis
 ```
 
 ---
