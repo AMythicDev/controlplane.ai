@@ -31,6 +31,8 @@ services:
       - GLIBC_TUNABLES=glibc.pthread.rseq=1
     ports:
       - '27017:27017'
+    volumes:
+      - mongo_data:/data/db
 
   inference:
     build: inference/
@@ -49,5 +51,9 @@ services:
       - '6333:6333'
       - '6334:6334'
     volumes:
-        - "./qdrant_storage:/qdrant/storage:z"
+        - qdrant_storage:/qdrant/storage:z
+
+volumes:
+  mongo_data:
+  qdrant_storage:
 

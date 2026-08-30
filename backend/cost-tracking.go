@@ -4,16 +4,18 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"strconv"
+	"strings"
 	"time"
-
-	"log"
 
 	"github.com/redis/go-redis/v9"
 )
 
 var rdb *redis.Client
+
+const SemanticCacheSavingsKey = "savings:semantic_cache"
 
 func getPerUserLimits() (int64, int64) {
 	ctx := context.Background()
@@ -111,4 +113,68 @@ func GetCurrentSpend(ctx context.Context, userID string) (int64, error) {
 	}
 
 	return currentSpend, nil
+}
+
+// GetSemanticCacheSavings retrieves the total savings by the semantic cache from Redis.
+// If the key is not available in Redis, it computes the savings from MongoDB,
+// stores it in Redis, and returns the total.
+func GetSemanticCacheSavings(ctx context.Context) (float64, error) {
+	if rdb == nil {
+		return ComputeSemanticCacheSavingsFromDB(ctx)
+	}
+
+	valStr, err := rdb.Get(ctx, SemanticCacheSavingsKey).Result()
+	if err == nil {
+		savings, parseErr := strconv.ParseFloat(valStr, 64)
+		if parseErr == nil {
+			return savings, nil
+		}
+		log.Printf("Warning: failed to parse redis savings '%s': %v", valStr, parseErr)
+	} else if !errors.Is(err, redis.Nil) {
+		log.Printf("Redis error getting semantic cache savings: %v", err)
+	}
+
+	// Key not found in Redis or Redis error: compute from MongoDB
+	savings, dbErr := ComputeSemanticCacheSavingsFromDB(ctx)
+	if dbErr != nil {
+		return 0, fmt.Errorf("failed to compute semantic cache savings from mongodb: %w", dbErr)
+	}
+
+	// Save computed savings to Redis
+	if setErr := rdb.Set(ctx, SemanticCacheSavingsKey, savings, 0).Err(); setErr != nil {
+		log.Printf("Warning: failed to save computed savings to redis: %v", setErr)
+	}
+
+	return savings, nil
+}
+
+// RecordCacheSavings increments the semantic cache savings in Redis when a request
+// is served from cache. If provider != "nvidia", the cost saved is $1.
+func RecordCacheSavings(ctx context.Context, provider string) error {
+	if strings.ToLower(strings.TrimSpace(provider)) == "nvidia" {
+		return nil
+	}
+
+	if rdb == nil {
+		return errors.New("redis client not initialized")
+	}
+
+	exists, err := rdb.Exists(ctx, SemanticCacheSavingsKey).Result()
+	if err != nil {
+		log.Printf("Warning: failed to check redis key '%s': %v", SemanticCacheSavingsKey, err)
+	}
+
+	if exists == 0 {
+		// Key does not exist in Redis, compute total from DB (which includes the logged request)
+		savings, dbErr := ComputeSemanticCacheSavingsFromDB(ctx)
+		if dbErr == nil {
+			return rdb.Set(ctx, SemanticCacheSavingsKey, savings, 0).Err()
+		}
+		// Fallback to setting 1.0
+		return rdb.Set(ctx, SemanticCacheSavingsKey, 1.0, 0).Err()
+	}
+
+	// Key exists, increment by 1.0
+	_, err = rdb.IncrByFloat(ctx, SemanticCacheSavingsKey, 1.0).Result()
+	return err
 }

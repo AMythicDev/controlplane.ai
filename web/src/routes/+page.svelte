@@ -36,6 +36,8 @@
 	};
 
 	let liveCost = $state<number>(0);
+	let liveSavings = $state<number>(0);
+	let liveAvgCost = $state<number>(0);
 	let userDailyLimit = $state<number>(50);
 	let userMonthlyLimit = $state<number>(1500);
 
@@ -51,6 +53,18 @@
 			if (costRes.ok) {
 				const costData = await costRes.json();
 				liveCost = costData.cost_dollars;
+				if (costData.semantic_cache_savings !== undefined) {
+					liveSavings = costData.semantic_cache_savings;
+				} else if (costData.savings_dollars !== undefined) {
+					liveSavings = costData.savings_dollars;
+				}
+				if (costData.avg_cost !== undefined) {
+					liveAvgCost = costData.avg_cost;
+				} else if (costData.average_cost !== undefined) {
+					liveAvgCost = costData.average_cost;
+				} else if (costData.average_cost_dollars !== undefined) {
+					liveAvgCost = costData.average_cost_dollars;
+				}
 			}
 
 			if (configRes.ok) {
@@ -142,7 +156,7 @@
 					{mockDashboardStats.requestsPerMinute} REQ/MIN</span
 				>
 				<span class="opacity-50">·</span>
-				<span>$0.18 AVG COST</span>
+				<span>${liveAvgCost < 0.01 && liveAvgCost > 0 ? liveAvgCost.toFixed(4) : liveAvgCost.toFixed(2)} AVG COST</span>
 				<span class="opacity-50">·</span>
 				<span class="text-accent-danger">3 FLAGS/HR</span>
 			</div>
@@ -297,7 +311,7 @@
 			<div
 				class="mt-auto flex w-full flex-col items-center text-center lg:items-start lg:text-left"
 			>
-				<span class="mb-1 font-mono text-2xl text-accent-perf">$342.50</span>
+				<span class="mb-1 font-mono text-2xl text-accent-perf">${formatNum(liveSavings)}</span>
 				<span class="max-w-[200px] text-xs text-secondary">Saved this month via Semantic Cache</span
 				>
 			</div>

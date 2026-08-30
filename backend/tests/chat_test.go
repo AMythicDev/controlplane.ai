@@ -15,6 +15,9 @@ import (
 func TestSingleChat(t *testing.T) {
 	expectation, err := os.Open("expectation.json")
 	if err != nil {
+		expectation, err = os.Open("../expectation.json")
+	}
+	if err != nil {
 		panic("expectation.json not found. Required for configuring mockserver.")
 	}
 

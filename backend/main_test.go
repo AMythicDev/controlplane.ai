@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"log"
 	"math"
@@ -12,6 +13,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
 func TestChatCompletionsProxy(t *testing.T) {
@@ -354,6 +356,148 @@ func TestSemanticCache(t *testing.T) {
 		assert.False(t, res.Found)
 	})
 }
+
+func TestSemanticCacheSavings(t *testing.T) {
+	InitRedis()
+	InitMongoDB()
+	ctx := context.Background()
+
+	// Clear redis key and mongo collection for clean test state
+	rdb.Del(ctx, SemanticCacheSavingsKey)
+	_, _ = requestsCollection.DeleteMany(ctx, bson.D{})
+
+	t.Run("Compute from empty MongoDB returns 0", func(t *testing.T) {
+		savings, err := ComputeSemanticCacheSavingsFromDB(ctx)
+		assert.NoError(t, err)
+		assert.Equal(t, float64(0), savings)
+	})
+
+	t.Run("Compute with cached requests non-nvidia and nvidia", func(t *testing.T) {
+		// Insert requests:
+		// 1: cached=true, provider=openai (+$1)
+		// 2: cached=true, provider=anthropic (+$1)
+		// 3: cached=true, provider=nvidia (+$0)
+		// 4: cached=false, provider=openai (+$0)
+		// 5: cached=true, provider=google (+$1)
+		records := []interface{}{
+			RequestRecord{Endpoint: "/v1/chat/completions", Provider: "openai", Cached: true, Timestamp: time.Now().UTC()},
+			RequestRecord{Endpoint: "/v1/chat/completions", Provider: "anthropic", Cached: true, Timestamp: time.Now().UTC()},
+			RequestRecord{Endpoint: "/v1/chat/completions", Provider: "nvidia", Cached: true, Timestamp: time.Now().UTC()},
+			RequestRecord{Endpoint: "/v1/chat/completions", Provider: "openai", Cached: false, Timestamp: time.Now().UTC()},
+			RequestRecord{Endpoint: "/v1/playground", Provider: "google", Cached: true, Timestamp: time.Now().UTC()},
+		}
+		_, err := requestsCollection.InsertMany(ctx, records)
+		assert.NoError(t, err)
+
+		savings, err := ComputeSemanticCacheSavingsFromDB(ctx)
+		assert.NoError(t, err)
+		assert.Equal(t, float64(3.0), savings)
+	})
+
+	t.Run("GetSemanticCacheSavings populates Redis on cache miss", func(t *testing.T) {
+		rdb.Del(ctx, SemanticCacheSavingsKey)
+
+		// Key is deleted from Redis, GetSemanticCacheSavings should compute from DB (3.0) and save to Redis
+		savings, err := GetSemanticCacheSavings(ctx)
+		assert.NoError(t, err)
+		assert.Equal(t, float64(3.0), savings)
+
+		// Verify key exists in Redis with value 3
+		val, err := rdb.Get(ctx, SemanticCacheSavingsKey).Result()
+		assert.NoError(t, err)
+		assert.Equal(t, "3", val)
+	})
+
+	t.Run("GetSemanticCacheSavings reads from Redis when available", func(t *testing.T) {
+		// Overwrite Redis key directly with 10.0
+		rdb.Set(ctx, SemanticCacheSavingsKey, 10.0, 0)
+
+		savings, err := GetSemanticCacheSavings(ctx)
+		assert.NoError(t, err)
+		assert.Equal(t, float64(10.0), savings)
+	})
+
+	t.Run("RecordCacheSavings increments Redis for non-nvidia providers", func(t *testing.T) {
+		rdb.Set(ctx, SemanticCacheSavingsKey, 5.0, 0)
+
+		// Increment for openai
+		err := RecordCacheSavings(ctx, "openai")
+		assert.NoError(t, err)
+
+		savings, err := GetSemanticCacheSavings(ctx)
+		assert.NoError(t, err)
+		assert.Equal(t, float64(6.0), savings)
+
+		// Increment for openrouter
+		err = RecordCacheSavings(ctx, "openrouter")
+		assert.NoError(t, err)
+
+		savings, err = GetSemanticCacheSavings(ctx)
+		assert.NoError(t, err)
+		assert.Equal(t, float64(7.0), savings)
+	})
+
+	t.Run("RecordCacheSavings does not increment for nvidia provider", func(t *testing.T) {
+		rdb.Set(ctx, SemanticCacheSavingsKey, 7.0, 0)
+
+		err := RecordCacheSavings(ctx, "nvidia")
+		assert.NoError(t, err)
+
+		savings, err := GetSemanticCacheSavings(ctx)
+		assert.NoError(t, err)
+		assert.Equal(t, float64(7.0), savings)
+	})
+
+	t.Run("GET /v1/cost returns semantic cache savings and average cost", func(t *testing.T) {
+		rdb.Set(ctx, SemanticCacheSavingsKey, 12.0, 0)
+
+		router := setupRouter()
+		w := httptest.NewRecorder()
+		req, _ := http.NewRequest("GET", "/v1/cost", nil)
+		router.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+
+		var resp map[string]interface{}
+		err := json.Unmarshal(w.Body.Bytes(), &resp)
+		assert.NoError(t, err)
+
+		assert.Equal(t, "user_mvp_123", resp["user_id"])
+		assert.Contains(t, resp, "semantic_cache_savings")
+		assert.Equal(t, float64(12.0), resp["semantic_cache_savings"])
+		assert.Equal(t, float64(12.0), resp["semantic_cache_savings_dollars"])
+		assert.Equal(t, float64(12000000), resp["semantic_cache_savings_microcents"])
+
+		assert.Contains(t, resp, "average_cost")
+		assert.Contains(t, resp, "avg_cost")
+	})
+
+	t.Run("ComputeAverageCost with multiple requests", func(t *testing.T) {
+		_, _ = requestsCollection.DeleteMany(ctx, bson.D{})
+
+		// Empty DB
+		avgDollars, avgMicrocents, err := ComputeAverageCost(ctx)
+		assert.NoError(t, err)
+		assert.Equal(t, 0.0, avgDollars)
+		assert.Equal(t, 0.0, avgMicrocents)
+
+		// Insert 4 requests: costs $0, $1, $2, $3 (in microcents: 0, 1M, 2M, 3M) -> total = 6M / 4 = 1.5M ($1.50)
+		records := []interface{}{
+			RequestRecord{Endpoint: "/v1/chat/completions", CostMicrocents: 0, Timestamp: time.Now().UTC()},
+			RequestRecord{Endpoint: "/v1/chat/completions", CostMicrocents: 1000000, Timestamp: time.Now().UTC()},
+			RequestRecord{Endpoint: "/v1/chat/completions", CostMicrocents: 2000000, Timestamp: time.Now().UTC()},
+			RequestRecord{Endpoint: "/v1/playground", CostMicrocents: 3000000, Timestamp: time.Now().UTC()},
+		}
+		_, err = requestsCollection.InsertMany(ctx, records)
+		assert.NoError(t, err)
+
+		avgDollars, avgMicrocents, err = ComputeAverageCost(ctx)
+		assert.NoError(t, err)
+		assert.Equal(t, 1.5, avgDollars)
+		assert.Equal(t, 1500000.0, avgMicrocents)
+	})
+}
+
 
 
 

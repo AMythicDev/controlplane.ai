@@ -115,19 +115,24 @@ func setupRouter() *gin.Engine {
 				conf := float32(1.0)
 				toxicity := float32(0.0)
 
-				go LogRequest(RequestRecord{
-					Endpoint:       "/v1/chat/completions",
-					Model:          req.Model,
-					Provider:       provider,
-					Prompt:         premise,
-					Messages:       chatMessages,
-					Response:       cachedContent,
-					Confidence:     &conf,
-					Toxicity:       toxicity,
-					NLI:            nil,
-					CostMicrocents: 0,
-					Cached:         true,
-				})
+				go func() {
+					LogRequest(RequestRecord{
+						Endpoint:       "/v1/chat/completions",
+						Model:          req.Model,
+						Provider:       provider,
+						Prompt:         premise,
+						Messages:       chatMessages,
+						Response:       cachedContent,
+						Confidence:     &conf,
+						Toxicity:       toxicity,
+						NLI:            nil,
+						CostMicrocents: 0,
+						Cached:         true,
+					})
+					if err := RecordCacheSavings(context.Background(), provider); err != nil {
+						log.Printf("Error recording cache savings: %v", err)
+					}
+				}()
 
 				choice := gin.H{
 					"index": 0,
@@ -248,10 +253,35 @@ func setupRouter() *gin.Engine {
 			return
 		}
 
+		savings, err := GetSemanticCacheSavings(c.Request.Context())
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+
+		avgCostDollars, avgCostMicrocents, err := ComputeAverageCost(c.Request.Context())
+		if err != nil {
+			log.Printf("Warning: failed to compute average cost: %v", err)
+			avgCostDollars = 0.0
+			avgCostMicrocents = 0.0
+		}
+
 		c.JSON(http.StatusOK, gin.H{
-			"user_id":         userID,
-			"cost_microcents": currentSpend,
-			"cost_dollars":    float64(currentSpend) / 1000000.0,
+			"user_id":                            userID,
+			"cost_microcents":                   currentSpend,
+			"cost_dollars":                      float64(currentSpend) / 1000000.0,
+			"semantic_cache_savings":            savings,
+			"semantic_cache_savings_dollars":    savings,
+			"semantic_cache_savings_microcents": int64(savings * 1000000.0),
+			"savings_dollars":                   savings,
+			"savings_microcents":                int64(savings * 1000000.0),
+			"total_savings":                     savings,
+			"average_cost":                      avgCostDollars,
+			"average_cost_dollars":              avgCostDollars,
+			"average_cost_microcents":           avgCostMicrocents,
+			"avg_cost":                          avgCostDollars,
+			"avg_cost_dollars":                  avgCostDollars,
+			"avg_cost_microcents":               avgCostMicrocents,
 		})
 	})
 
@@ -339,19 +369,24 @@ func setupRouter() *gin.Engine {
 				toxicity := float32(0.0)
 				latencyMs := time.Since(start).Milliseconds()
 
-				go LogRequest(RequestRecord{
-					Endpoint:       "/v1/playground",
-					Model:          req.ModelSpec,
-					Provider:       provider,
-					Prompt:         req.Prompt,
-					Response:       cachedContent,
-					Confidence:     &conf,
-					Toxicity:       toxicity,
-					NLI:            nil,
-					LatencyMs:      latencyMs,
-					CostMicrocents: 0,
-					Cached:         true,
-				})
+				go func() {
+					LogRequest(RequestRecord{
+						Endpoint:       "/v1/playground",
+						Model:          req.ModelSpec,
+						Provider:       provider,
+						Prompt:         req.Prompt,
+						Response:       cachedContent,
+						Confidence:     &conf,
+						Toxicity:       toxicity,
+						NLI:            nil,
+						LatencyMs:      latencyMs,
+						CostMicrocents: 0,
+						Cached:         true,
+					})
+					if err := RecordCacheSavings(context.Background(), provider); err != nil {
+						log.Printf("Error recording cache savings: %v", err)
+					}
+				}()
 
 				c.JSON(http.StatusOK, gin.H{
 					"model":      model,

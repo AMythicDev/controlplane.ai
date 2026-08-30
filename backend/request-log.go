@@ -2,8 +2,11 @@ package main
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"log"
 	"os"
+	"strings"
 	"time"
 
 	"go.mongodb.org/mongo-driver/v2/bson"
@@ -114,4 +117,103 @@ func FetchRequestByID(id string) (*RequestRecord, error) {
 	}
 
 	return &record, nil
+}
+
+// ComputeSemanticCacheSavingsFromDB calculates total savings by iterating over
+// all cached requests in MongoDB. For each cached request where provider != "nvidia",
+// $1 is added to the savings.
+func ComputeSemanticCacheSavingsFromDB(ctx context.Context) (float64, error) {
+	if requestsCollection == nil {
+		return 0, errors.New("mongodb requests collection not initialized")
+	}
+
+	filter := bson.D{{Key: "cached", Value: true}}
+	cursor, err := requestsCollection.Find(ctx, filter)
+	if err != nil {
+		return 0, fmt.Errorf("failed to find cached requests in mongodb: %w", err)
+	}
+	defer cursor.Close(ctx)
+
+	var cachedRequests []RequestRecord
+	if err := cursor.All(ctx, &cachedRequests); err != nil {
+		return 0, fmt.Errorf("failed to decode cached requests: %w", err)
+	}
+
+	var totalSavings float64
+	for _, req := range cachedRequests {
+		if strings.ToLower(strings.TrimSpace(req.Provider)) != "nvidia" {
+			totalSavings += 1.0
+		}
+	}
+
+	return totalSavings, nil
+}
+
+// ComputeAverageCost calculates the average cost across all logged requests in MongoDB.
+// Returns average cost in dollars and in microcents.
+func ComputeAverageCost(ctx context.Context) (float64, float64, error) {
+	if requestsCollection == nil {
+		return 0, 0, errors.New("mongodb requests collection not initialized")
+	}
+
+	pipeline := mongo.Pipeline{
+		{{Key: "$group", Value: bson.D{
+			{Key: "_id", Value: nil},
+			{Key: "totalCost", Value: bson.D{{Key: "$sum", Value: "$cost_microcents"}}},
+			{Key: "count", Value: bson.D{{Key: "$sum", Value: 1}}},
+		}}},
+	}
+
+	cursor, err := requestsCollection.Aggregate(ctx, pipeline)
+	if err != nil {
+		return 0, 0, fmt.Errorf("failed to aggregate average cost from mongodb: %w", err)
+	}
+	defer cursor.Close(ctx)
+
+	var results []bson.M
+	if err := cursor.All(ctx, &results); err != nil {
+		return 0, 0, fmt.Errorf("failed to decode average cost aggregation results: %w", err)
+	}
+
+	if len(results) == 0 {
+		return 0.0, 0.0, nil
+	}
+
+	var totalCost float64
+	var count float64
+
+	switch v := results[0]["totalCost"].(type) {
+	case int32:
+		totalCost = float64(v)
+	case int64:
+		totalCost = float64(v)
+	case float64:
+		totalCost = v
+	case float32:
+		totalCost = float64(v)
+	case int:
+		totalCost = float64(v)
+	}
+
+	switch v := results[0]["count"].(type) {
+	case int32:
+		count = float64(v)
+	case int64:
+		count = float64(v)
+	case float64:
+		count = v
+	case float32:
+		count = float64(v)
+	case int:
+		count = float64(v)
+	}
+
+	if count == 0 {
+		return 0.0, 0.0, nil
+	}
+
+	avgMicrocents := totalCost / count
+	avgDollars := avgMicrocents / 1000000.0
+
+	return avgDollars, avgMicrocents, nil
 }
