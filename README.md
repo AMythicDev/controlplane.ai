@@ -51,40 +51,51 @@
 
 ```mermaid
 flowchart LR
-    subgraph Clients ["Clients & Applications"]
+    classDef clientStyle fill:#1e293b,stroke:#38bdf8,stroke-width:2px,color:#f8fafc;
+    classDef gatewayStyle fill:#1e1b4b,stroke:#818cf8,stroke-width:2px,color:#ffffff;
+    classDef cacheStyle fill:#78350f,stroke:#f59e0b,stroke-width:2px,color:#fef3c7;
+    classDef serviceStyle fill:#0f3b2f,stroke:#2dd4bf,stroke-width:2px,color:#ffffff;
+    classDef redisStyle fill:#450a0a,stroke:#f87171,stroke-width:2px,color:#fee2e2;
+    classDef mongoStyle fill:#052e16,stroke:#4ade80,stroke-width:2px,color:#dcfce7;
+    classDef qdrantStyle fill:#4c0519,stroke:#fb7185,stroke-width:2px,color:#ffe4e6;
+    classDef nvidiaStyle fill:#143415,stroke:#76b900,stroke-width:2px,color:#ffffff;
+    classDef openaiStyle fill:#064e3b,stroke:#10a37f,stroke-width:2px,color:#ffffff;
+    classDef anthropicStyle fill:#451a03,stroke:#fb923c,stroke-width:2px,color:#ffffff;
+
+    subgraph Clients ["💻 Clients & Applications"]
         direction TB
-        SDK["Client SDK / curl"]
-        UI["SvelteKit Dashboard"]
+        SDK["Client SDK / curl"]:::clientStyle
+        UI["SvelteKit Dashboard"]:::clientStyle
     end
 
-    subgraph Gateway ["ControlPlane.ai Gateway (Go :8080)"]
+    subgraph Gateway ["⚡ ControlPlane.ai Gateway (Go :8080)"]
         direction TB
-        G1["1. Budget & Rate Limiter"]
-        G2["2. PII Masking & Anonymizer"]
-        G3{"3. Semantic Cache"}
-        G4["4. Multi-Provider Router"]
-        G5["5. Toxicity & NLI Guardrails"]
-        G6["6. Telemetry & Spend Logger"]
+        G1["1. Budget & Rate Limiter"]:::gatewayStyle
+        G2["2. PII Masking & Anonymizer"]:::gatewayStyle
+        G3{"3. Semantic Cache"}:::cacheStyle
+        G4["4. Multi-Provider Router"]:::gatewayStyle
+        G5["5. Toxicity & NLI Guardrails"]:::gatewayStyle
+        G6["6. Telemetry & Spend Logger"]:::gatewayStyle
 
         G1 --> G2 --> G3
         G3 -->|"Cache Miss"| G4 --> G5 --> G6
         G3 -->|"Cache Hit (0ms / $0)"| G6
     end
 
-    subgraph Services ["Guardrail & Data Services"]
+    subgraph Services ["🛡️ Guardrail & Data Services"]
         direction TB
-        Presidio["Microsoft Presidio (:5000)"]
-        Inference["Inference Engine (ONNX :5002)"]
-        Qdrant[("Qdrant Vector DB (:6333)")]
-        Redis[("Redis (:6379)")]
-        Mongo[("MongoDB (:27017)")]
+        Presidio["Microsoft Presidio (:5000)"]:::serviceStyle
+        Inference["Inference Engine (ONNX :5002)"]:::serviceStyle
+        Qdrant[("Qdrant Vector DB (:6333)")]:::qdrantStyle
+        Redis[("Redis (:6379)")]:::redisStyle
+        Mongo[("MongoDB (:27017)")]:::mongoStyle
     end
 
-    subgraph Providers ["Upstream LLM Providers"]
+    subgraph Providers ["🤖 Upstream LLM Providers"]
         direction TB
-        NVIDIA["NVIDIA NIM (Free)"]
-        OpenAI["OpenAI"]
-        Anthropic["Anthropic"]
+        NVIDIA["NVIDIA NIM (Free)"]:::nvidiaStyle
+        OpenAI["OpenAI"]:::openaiStyle
+        Anthropic["Anthropic"]:::anthropicStyle
     end
 
     Clients -->|"POST /v1/chat/completions"| G1
@@ -98,6 +109,11 @@ flowchart LR
     G5 -.-> Inference
     G6 -.-> Mongo
     G6 -.-> Redis
+
+    style Clients fill:#0b1329,stroke:#0284c7,stroke-width:1.5px,stroke-dasharray: 4 4,color:#38bdf8
+    style Gateway fill:#13112c,stroke:#6366f1,stroke-width:2px,color:#c7d2fe
+    style Services fill:#06231a,stroke:#0d9488,stroke-width:1.5px,stroke-dasharray: 4 4,color:#2dd4bf
+    style Providers fill:#1c1308,stroke:#d97706,stroke-width:1.5px,stroke-dasharray: 4 4,color:#fbbf24
 ```
 
 ---
