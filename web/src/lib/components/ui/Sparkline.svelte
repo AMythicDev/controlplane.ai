@@ -10,7 +10,7 @@
   let max = $derived(Math.max(...data));
   let range = $derived(max - min || 1);
   
-  let points = $derived(data.map((val, i) => {
+  let points = $derived(data.map((val: number, i: number) => {
     const x = (i / (data.length - 1)) * width;
     const y = height - ((val - min) / range) * (height - 4) - 2; // pad top/bottom
     return `${x},${y}`;

@@ -97,3 +97,34 @@ export interface RequestRecord {
     cached?: boolean;
     timestamp: string;
 }
+
+export interface DailyModelCount {
+    date: string;
+    count: number;
+}
+
+export interface ModelAnalyticsItem {
+    model: string;
+    provider: string;
+    request_count: number;
+    percentage: number;
+    avg_confidence: number | null;
+    confidence_count: number;
+    avg_hallucination: number | null;
+    nli_count: number;
+    avg_toxicity: number;
+    toxicity_count: number;
+    total_cost_microcents: number;
+    total_cost_dollars: number;
+    daily_counts: DailyModelCount[];
+}
+
+export interface AnalyticsResponse {
+    total_requests: number;
+    weekly_requests: number;
+    weekly_start_date: string;
+    weekly_end_date: string;
+    models: ModelAnalyticsItem[];
+    daily_totals: DailyModelCount[];
+}
+

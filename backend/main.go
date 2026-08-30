@@ -523,6 +523,18 @@ func setupRouter() *gin.Engine {
 		c.JSON(http.StatusOK, record)
 	})
 
+	analyticsHandler := func(c *gin.Context) {
+		stats, err := GetModelAnalytics(c.Request.Context())
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, stats)
+	}
+
+	r.GET("/v1/analytics", analyticsHandler)
+	r.GET("/v1/stats", analyticsHandler)
+
 	return r
 }
 

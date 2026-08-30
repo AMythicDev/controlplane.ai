@@ -8,6 +8,7 @@
       case 'edit': return { icon: '✎', label: 'Edit', classes: 'text-[var(--accent-performance)] bg-[var(--accent-performance)]/10 border-[var(--accent-performance)]/20' };
       case 'block': return { icon: '✕', label: 'Block', classes: 'text-[var(--accent-danger)] bg-[var(--accent-danger)]/10 border-[var(--accent-danger)]/20' };
       case 'escalate': return { icon: '⇧', label: 'Escalate', classes: 'text-[#d500f9] bg-[#d500f9]/10 border-[#d500f9]/20' };
+      default: return { icon: '•', label: action, classes: 'text-secondary bg-surface border-elevated' };
     }
   });
 </script>

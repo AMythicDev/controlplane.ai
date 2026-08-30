@@ -496,6 +496,91 @@ func TestSemanticCacheSavings(t *testing.T) {
 		assert.Equal(t, 1.5, avgDollars)
 		assert.Equal(t, 1500000.0, avgMicrocents)
 	})
+
+	t.Run("GetModelAnalytics with model metrics and last week breakdown", func(t *testing.T) {
+		_, _ = requestsCollection.DeleteMany(ctx, bson.D{})
+
+		conf1 := float32(0.9)
+		conf2 := float32(0.8)
+		conf3 := float32(0.6)
+
+		nli1 := &NLIReport{Label: "entailment", Score: 0.95, ContradictionProb: 0.05, NeutralProb: 0.1, EntailmentProb: 0.85}
+		nli2 := &NLIReport{Label: "contradiction", Score: 0.85, ContradictionProb: 0.85, NeutralProb: 0.1, EntailmentProb: 0.05}
+
+		records := []interface{}{
+			RequestRecord{
+				Endpoint:       "/v1/chat/completions",
+				Model:          "openai/gpt-4o",
+				Provider:       "openai",
+				Confidence:     &conf1,
+				Toxicity:       0.02,
+				NLI:            nli1,
+				CostMicrocents: 10000,
+				Timestamp:      time.Now().UTC().Add(-2 * time.Hour),
+			},
+			RequestRecord{
+				Endpoint:       "/v1/chat/completions",
+				Model:          "openai/gpt-4o",
+				Provider:       "openai",
+				Confidence:     &conf2,
+				Toxicity:       0.04,
+				NLI:            nli1,
+				CostMicrocents: 20000,
+				Timestamp:      time.Now().UTC().Add(-24 * time.Hour),
+			},
+			RequestRecord{
+				Endpoint:       "/v1/playground",
+				Model:          "anthropic/claude-3.5-sonnet",
+				Provider:       "anthropic",
+				Confidence:     &conf3,
+				Toxicity:       0.12,
+				NLI:            nli2,
+				CostMicrocents: 30000,
+				Timestamp:      time.Now().UTC().Add(-48 * time.Hour),
+			},
+		}
+
+		_, err := requestsCollection.InsertMany(ctx, records)
+		assert.NoError(t, err)
+
+		analytics, err := GetModelAnalytics(ctx)
+		assert.NoError(t, err)
+		assert.Equal(t, int64(3), analytics.TotalRequests)
+		assert.Equal(t, int64(3), analytics.WeeklyRequests)
+		assert.Equal(t, 2, len(analytics.Models))
+
+		// First model should be gpt-4o (2 requests)
+		assert.Equal(t, "openai/gpt-4o", analytics.Models[0].Model)
+		assert.Equal(t, int64(2), analytics.Models[0].RequestCount)
+		assert.InDelta(t, 66.67, analytics.Models[0].Percentage, 0.5)
+		assert.NotNil(t, analytics.Models[0].AvgConfidence)
+		assert.InDelta(t, 0.85, *analytics.Models[0].AvgConfidence, 0.01)
+		assert.InDelta(t, 0.03, analytics.Models[0].AvgToxicity, 0.01)
+		assert.NotNil(t, analytics.Models[0].AvgHallucination)
+		assert.InDelta(t, 0.05, *analytics.Models[0].AvgHallucination, 0.01)
+
+		// Second model should be claude (1 request)
+		assert.Equal(t, "anthropic/claude-3.5-sonnet", analytics.Models[1].Model)
+		assert.Equal(t, int64(1), analytics.Models[1].RequestCount)
+		assert.InDelta(t, 33.33, analytics.Models[1].Percentage, 0.5)
+		assert.NotNil(t, analytics.Models[1].AvgConfidence)
+		assert.InDelta(t, 0.6, *analytics.Models[1].AvgConfidence, 0.01)
+		assert.InDelta(t, 0.12, analytics.Models[1].AvgToxicity, 0.01)
+		assert.NotNil(t, analytics.Models[1].AvgHallucination)
+		assert.InDelta(t, 0.85, *analytics.Models[1].AvgHallucination, 0.01)
+
+		// Test HTTP endpoint GET /v1/analytics
+		router := setupRouter()
+		w := httptest.NewRecorder()
+		req, _ := http.NewRequest("GET", "/v1/analytics", nil)
+		router.ServeHTTP(w, req)
+		assert.Equal(t, http.StatusOK, w.Code)
+
+		var res AnalyticsResponse
+		err = json.Unmarshal(w.Body.Bytes(), &res)
+		assert.NoError(t, err)
+		assert.Equal(t, int64(3), res.TotalRequests)
+	})
 }
 
 

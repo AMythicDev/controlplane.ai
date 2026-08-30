@@ -2,8 +2,8 @@
 	// State for inputs
 	let budgetGlobalDaily = $state(0);
 	let budgetGlobalMonthly = $state(0);
-	let budgetUserDaily = $state(50);
-	let budgetUserMonthly = $state(1000);
+	let budgetUserDaily = $state(0);
+	let budgetUserMonthly = $state(0);
 	let isSaving = $state(false);
 	let saveMessage = $state('');
 
