@@ -18,7 +18,7 @@ var LoadedConfig struct {
 	Enviroment        string
 	MockServerBaseUrl string
 }{
-	Enviroment:        "testing",
+	Enviroment:        "production",
 	MockServerBaseUrl: "http://localhost:1080/v1",
 }
 
@@ -53,8 +53,8 @@ func setupRouter() *gin.Engine {
 		}
 
 		var req struct {
-			Model            string `json:"model" binding:"required"`
-			Messages         []struct {
+			Model    string `json:"model" binding:"required"`
+			Messages []struct {
 				Role    string `json:"role" binding:"required"`
 				Content string `json:"content" binding:"required"`
 			} `json:"messages" binding:"required"`
@@ -267,7 +267,7 @@ func setupRouter() *gin.Engine {
 		}
 
 		c.JSON(http.StatusOK, gin.H{
-			"user_id":                            userID,
+			"user_id":                           userID,
 			"cost_microcents":                   currentSpend,
 			"cost_dollars":                      float64(currentSpend) / 1000000.0,
 			"semantic_cache_savings":            savings,

@@ -63,16 +63,16 @@ flowchart TD
     end
     
     subgraph ExternalServices ["Data & Inference Services"]
-        RedisDB[("Redis (:6379)")]
-        Mongo[("MongoDB (:27017)")]
-        QdrantDB[("Qdrant Vector DB (:6333)")]
+        RedisDB[("Redis :6379")]
+        Mongo[("MongoDB :27017")]
+        QdrantDB[("Qdrant Vector DB :6333")]
         InferenceSvc["Inference API (FastAPI / ONNX :5002)"]
         PresidioSvc["Presidio Analyzer & Anonymizer (:5000 / :5001)"]
     end
     
     LLM["External LLM Providers (OpenAI / Anthropic / Local)"]
 
-    Client -->|POST /v1/chat/completions| BudgetCheck
+    Client -->|"POST /v1/chat/completions"| BudgetCheck
     BudgetCheck <--> RedisDB
     BudgetCheck --> PIICheck
     PIICheck <--> PresidioSvc
@@ -80,7 +80,7 @@ flowchart TD
     CacheCheck <--> InferenceSvc
     InferenceSvc <--> QdrantDB
     
-    CacheCheck -->|Cache Miss| Router
+    CacheCheck -->|"Cache Miss"| Router
     Router --> LLM
     LLM --> Guardrails
     Guardrails <--> InferenceSvc
@@ -89,7 +89,7 @@ flowchart TD
     Logger --> RedisDB
     Logger --> Client
     
-    CacheCheck -->|Cache Hit (0ms / $0)| Logger
+    CacheCheck -->|"Cache Hit (0ms / $0)"| Logger
 ```
 
 ---
@@ -136,6 +136,7 @@ MONGO_URI=mongodb://localhost:27017
 INFERENCE_API_URL=http://localhost:5002
 PRESIDIO_ANALYZER_URL=http://localhost:5000
 PRESIDIO_ANONYMIZER_URL=http://localhost:5001
+NVIDIA_API_KEY=nvapi-your-key-here
 ```
 
 ### 3. Run the Gateway
@@ -165,7 +166,7 @@ bun run dev
 curl -X POST http://localhost:8080/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "openai:gpt-4o-mini",
+    "model": "openai/gpt-4o-mini",
     "use_semantic_cache": true,
     "messages": [
       {
@@ -181,7 +182,7 @@ curl -X POST http://localhost:8080/v1/chat/completions \
 {
   "id": "chatcmpl-openai",
   "object": "chat.completion",
-  "model": "openai:gpt-4o-mini",
+  "model": "openai/gpt-4o-mini",
   "confidence": 0.98,
   "toxicity": 0.001,
   "nli": {
